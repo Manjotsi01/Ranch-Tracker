@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const dashboard_controller_1 = require("../controllers/dashboard.controller");
+const router = (0, express_1.Router)();
+router.get('/stats', dashboard_controller_1.getStats);
+router.get('/kpis', dashboard_controller_1.getKPIs);
+router.get('/alerts', dashboard_controller_1.getAlerts);
+router.get('/profit-chart', dashboard_controller_1.getProfitChart);
+router.get('/recent-activity', dashboard_controller_1.getRecentActivity);
+exports.default = router;
