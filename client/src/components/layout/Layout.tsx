@@ -16,7 +16,7 @@ export default function Layout() {
       height: '100vh',
       width: '100vw',
       overflow: 'hidden',
-      background: '#0e1117',
+      background: '#d4d0c8',
     }}>
       {/* Mobile backdrop */}
       {mobileOpen && (
@@ -74,8 +74,8 @@ export default function Layout() {
           flex: 1,
           overflowY: 'auto',
           overflowX: 'hidden',
-          padding: '20px 24px',
-          background: '#0e1117',
+          padding: '0px',
+          background: '#d4d0c8',
         }}>
           <Outlet />
         </div>

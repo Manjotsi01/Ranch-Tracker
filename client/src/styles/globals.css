@@ -51,9 +51,9 @@
 }
 
 html, body, #root {
-  font-family: var(--font-body);
-  background-color: var(--color-surface);
-  color: #e8f5e9;
+  font-family: "Tahoma", "Arial", var(--font-body);
+  background-color: #d4d0c8;
+  color: #000000;
   scroll-behavior: smooth;
 }
 
