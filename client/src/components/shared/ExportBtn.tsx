@@ -1,19 +1,47 @@
-// src/components/shared/ExportBtn.tsx
-import React, { useState } from 'react'
+// client/src/components/shared/ExportBtn.tsx
+
+import { useState } from 'react'
 import { Download, FileText, FileSpreadsheet } from 'lucide-react'
-import { Button } from '../../components/ui/Button'
+import Button from '../ui/Button'
 
 interface ExportBtnProps {
+  /** Simple mode — single action, no dropdown */
+  onClick?: () => void
+  label?: string
+  loading?: boolean
+  /** Dropdown mode — provide one or both handlers */
   onExportCSV?: () => void
   onExportPDF?: () => void
   className?: string
 }
 
-export const ExportBtn: React.FC<ExportBtnProps> = ({
-  onExportCSV, onExportPDF, className = ''
-}) => {
+export default function ExportBtn({
+  onClick,
+  label = 'Export',
+  loading = false,
+  onExportCSV,
+  onExportPDF,
+  className = '',
+}: ExportBtnProps) {
   const [open, setOpen] = useState(false)
 
+  // Simple mode: no dropdown options provided
+  if (!onExportCSV && !onExportPDF) {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        icon={<Download size={13} />}
+        loading={loading}
+        onClick={onClick}
+        className={className}
+      >
+        {label}
+      </Button>
+    )
+  }
+
+  // Dropdown mode
   return (
     <div className={`relative ${className}`}>
       <Button
@@ -22,8 +50,9 @@ export const ExportBtn: React.FC<ExportBtnProps> = ({
         icon={<Download size={14} />}
         onClick={() => setOpen((v) => !v)}
       >
-        Export
+        {label}
       </Button>
+
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
@@ -52,3 +81,6 @@ export const ExportBtn: React.FC<ExportBtnProps> = ({
     </div>
   )
 }
+
+// Named export for imports that use { ExportBtn }
+export { ExportBtn }

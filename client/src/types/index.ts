@@ -1,6 +1,26 @@
 // Path: ranch-tracker/client/src/types/index.ts
 
-// ─── Dashboard Types ──────────────────────────────────────────────
+export interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+  error?: string;
+}
+
+export interface PaginatedResponse<T> {
+  success: boolean;
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface SelectOption {
+  value: string;
+  label: string;
+}
+
+// ─── Dashboard Types ──────────────────────────────────────────────────────────
 export interface DashboardStats {
   totalRevenue: number;
   totalExpenses: number;
@@ -41,14 +61,6 @@ export interface ProfitChartPoint {
   profit: number;
 }
 
-export interface DashboardData {
-  stats: DashboardStats;
-  moduleKPIs: ModuleKPI[];
-  alerts: Alert[];
-  profitChart: ProfitChartPoint[];
-  recentActivity: ActivityItem[];
-}
-
 export interface ActivityItem {
   id: string;
   type: string;
@@ -58,12 +70,16 @@ export interface ActivityItem {
   createdAt: string;
 }
 
+export interface DashboardData {
+  stats: DashboardStats;
+  moduleKPIs: ModuleKPI[];
+  alerts: Alert[];
+  profitChart: ProfitChartPoint[];
+  recentActivity: ActivityItem[];
+}
 
-
-// ─── Agriculture Types ───────────────────────────────────────────────────────
-
+// ─── Agriculture Types ────────────────────────────────────────────────────────
 export type CropCategory = 'ARABLE' | 'VEGETABLE';
-
 export type SeasonStatus = 'PLANNED' | 'ACTIVE' | 'HARVESTED' | 'COMPLETED' | 'ABANDONED';
 
 export interface Crop {
@@ -71,7 +87,7 @@ export interface Crop {
   name: string;
   localName?: string;
   category: CropCategory;
-  subCategory?: string; 
+  subCategory?: string;
   description?: string;
   icon?: string;
   seasons?: CropSeason[];
@@ -89,12 +105,12 @@ export interface CropSeason {
   seasonId: string;
   cropId: string;
   cropName?: string;
-  label: string; 
+  label: string;
   startDate: string;
   endDate: string;
   status: SeasonStatus;
   variety?: string;
-  areaSown: number; 
+  areaSown: number;
   areaUnit: string;
   budget: number;
   totalExpense?: number;
@@ -143,481 +159,396 @@ export interface YieldEntry {
   notes?: string;
 }
 
-// ─── Shared ───────────────────────────────────────────────────────────────────
-
-export interface ApiResponse<T> {
-  success: boolean;
-  data: T;
-  message?: string;
-  error?: string;
-}
-
-export interface PaginatedResponse<T> {
-  success: boolean;
-  data: T[];
-  total: number;
-  page: number;
-  limit: number;
-}
-
-export interface SelectOption {
-  value: string;
-  label: string;
-}
-
-
 // ─── Animal Types ─────────────────────────────────────────────────────────────
 export type AnimalStatus =
-  | 'CALF'
-  | 'WEANED_CALF'
-  | 'HEIFER'
-  | 'PREGNANT_HEIFER'
-  | 'LACTATING'      
-  | 'DRY'
-  | 'TRANSITION'
-  | 'MILKING'       
-  | 'SOLD'
-  | 'DEAD';
- 
+  | 'CALF' | 'WEANED_CALF' | 'HEIFER' | 'PREGNANT_HEIFER'
+  | 'LACTATING' | 'DRY' | 'TRANSITION' | 'MILKING' | 'SOLD' | 'DEAD';
+
 export type AnimalType   = 'COW' | 'BUFFALO';
 export type AnimalGender = 'FEMALE' | 'MALE';
- 
+
 export interface Bloodline {
-  damId?:        string;
-  damTag?:       string;
-  sireSemen?:    string;
-  bullName?:     string;
+  damId?: string;
+  damTag?: string;
+  sireSemen?: string;
+  bullName?: string;
   geneticNotes?: string;
 }
- 
+
 export interface Animal {
-  _id:            string;
-  animalId:       string;
-  tagNo:          string;
-  name?:          string;
-  type:           AnimalType;
-  gender:         AnimalGender;
-  breed:          string;
-  dateOfBirth?:   string;
-  status:         AnimalStatus;
-  bloodline:      Bloodline;
-  purchaseDate?:  string;
-  purchaseCost?:  number;
+  _id: string;
+  animalId: string;
+  tagNo: string;
+  name?: string;
+  type: AnimalType;
+  gender: AnimalGender;
+  breed: string;
+  dateOfBirth?: string;
+  status: AnimalStatus;
+  bloodline: Bloodline;
+  purchaseDate?: string;
+  purchaseCost?: number;
   currentWeight?: number;
-  color?:         string;
-  notes?:         string;
-  createdAt:      string;
-  updatedAt:      string;
+  color?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
 }
- 
+
 export interface AnimalListItem extends Animal {
-  latestMilk?:          number;
+  latestMilk?: number;
   currentLactationDay?: number;
-  monthlyMilk?:         number;
+  monthlyMilk?: number;
 }
- 
-// ─── Milk Records ──────────────────────────────────────────────────────────────
- 
+
+// ─── Milk Records ─────────────────────────────────────────────────────────────
 export type MilkSession = 'MORNING' | 'EVENING';
- 
+
 export interface MilkRecord {
-  _id:       string;
-  animalId:  string;
-  date:      string;
-  session:   MilkSession;
-  quantity:  number;
-  fat?:      number;
-  snf?:      number;
-  notes?:    string;
+  _id: string;
+  animalId: string;
+  date: string;
+  session: MilkSession;
+  quantity: number;
+  fat?: number;
+  snf?: number;
+  notes?: string;
   createdAt: string;
 }
- 
+
 export interface DailyMilkSummary {
-  date:    string;
+  date: string;
   morning: number;
   evening: number;
-  total:   number;
+  total: number;
 }
- 
+
 export interface MonthlyMilkStats {
-  month:       string;
+  month: string;
   totalLiters: number;
-  avgPerDay:   number;
-  peakDay:     string;
-  peakLiters:  number;
+  avgPerDay: number;
+  peakDay: string;
+  peakLiters: number;
 }
- 
-// ─── Lactation ─────────────────────────────────────────────────────────────────
- 
+
+// ─── Lactation ────────────────────────────────────────────────────────────────
 export interface Lactation {
-  _id:             string;
-  animalId:        string;
+  _id: string;
+  animalId: string;
   lactationNumber: number;
-  startDate:       string;
-  endDate?:        string;
-  calvingId?:      string;
-  totalYield?:     number;
-  peakYield?:      number;
-  peakDay?:        number;
-  status:          'ACTIVE' | 'COMPLETED';
+  startDate: string;
+  endDate?: string;
+  calvingId?: string;
+  totalYield?: number;
+  peakYield?: number;
+  peakDay?: number;
+  status: 'ACTIVE' | 'COMPLETED';
 }
- 
-// ─── Reproduction ──────────────────────────────────────────────────────────────
- 
+
+// ─── Reproduction ─────────────────────────────────────────────────────────────
 export type AIStatus        = 'DONE' | 'CONFIRMED_PREGNANT' | 'NOT_PREGNANT' | 'REPEAT';
 export type PregnancyStatus = 'PREGNANT' | 'NOT_PREGNANT' | 'UNKNOWN' | 'OPEN';
- 
+
 export interface AIRecord {
-  _id:                string;
-  animalId:           string;
-  date:               string;
-  semenBullName?:     string;
-  semenCode?:         string;
-  technicianName?:    string;
-  status:             AIStatus;
+  _id: string;
+  animalId: string;
+  date: string;
+  semenBullName?: string;
+  semenCode?: string;
+  technicianName?: string;
+  status: AIStatus;
   pregnancyCheckDate?: string;
-  notes?:             string;
-  createdAt:          string;
+  notes?: string;
+  createdAt: string;
 }
- 
+
 export interface CalvingRecord {
-  _id:           string;
-  animalId:      string;
-  date:          string;
-  calfGender:    AnimalGender;
-  calfTagNo?:    string;
-  calfWeight?:   number;
+  _id: string;
+  animalId: string;
+  date: string;
+  calfGender: AnimalGender;
+  calfTagNo?: string;
+  calfWeight?: number;
   complications?: string;
-  aiRecordId?:   string;
-  notes?:        string;
-  createdAt:     string;
+  aiRecordId?: string;
+  notes?: string;
+  createdAt: string;
 }
- 
+
 export interface ReproductionSummary {
-  animalId:               string;
+  animalId: string;
   currentPregnancyStatus: PregnancyStatus;
-  expectedDueDate?:       string;
-  totalCalvings:          number;
-  lastCalvingDate?:       string;
-  totalAIAttempts:        number;
-  lastAIDate?:            string;
-  aiRecords:              AIRecord[];
-  calvingRecords:         CalvingRecord[];
+  expectedDueDate?: string;
+  totalCalvings: number;
+  lastCalvingDate?: string;
+  totalAIAttempts: number;
+  lastAIDate?: string;
+  aiRecords: AIRecord[];
+  calvingRecords: CalvingRecord[];
 }
- 
-// ─── Health ────────────────────────────────────────────────────────────────────
- 
+
+// ─── Health ───────────────────────────────────────────────────────────────────
 export type VaccineStatus = 'GIVEN' | 'DUE' | 'OVERDUE';
- 
+
 export interface VaccinationRecord {
-  _id:               string;
-  animalId:          string;
-  vaccineName:       string;
-  date:              string;
-  nextDueDate?:      string;
-  dosage?:           string;
+  _id: string;
+  animalId: string;
+  vaccineName: string;
+  date: string;
+  nextDueDate?: string;
+  dosage?: string;
   veterinarianName?: string;
-  cost?:             number;
-  notes?:            string;
-  status:            VaccineStatus;
-  createdAt:         string;
+  cost?: number;
+  notes?: string;
+  status: VaccineStatus;
+  createdAt: string;
 }
- 
+
 export interface TreatmentRecord {
-  _id:               string;
-  animalId:          string;
-  date:              string;
-  diagnosis:         string;
-  medicines:         string[];
+  _id: string;
+  animalId: string;
+  date: string;
+  diagnosis: string;
+  medicines: string[];
   veterinarianName?: string;
-  cost?:             number;
-  followUpDate?:     string;
-  notes?:            string;
-  createdAt:         string;
+  cost?: number;
+  followUpDate?: string;
+  notes?: string;
+  createdAt: string;
 }
- 
+
 export interface HealthSummary {
-  animalId:             string;
+  animalId: string;
   totalVaccinationCost: number;
-  totalTreatmentCost:   number;
+  totalTreatmentCost: number;
   upcomingVaccinations: VaccinationRecord[];
-  recentTreatments:     TreatmentRecord[];
-  vaccinations:         VaccinationRecord[];
-  treatments:           TreatmentRecord[];
+  recentTreatments: TreatmentRecord[];
+  vaccinations: VaccinationRecord[];
+  treatments: TreatmentRecord[];
 }
- 
-// ─── Feeding ───────────────────────────────────────────────────────────────────
- 
+
+// ─── Feeding ──────────────────────────────────────────────────────────────────
 export type FodderType = 'GREEN' | 'DRY' | 'SILAGE' | 'CONCENTRATE' | 'SUPPLEMENT';
- 
+
 export interface FeedRecord {
-  _id:        string;
-  animalId:   string;
-  date:       string;
+  _id: string;
+  animalId: string;
+  date: string;
   fodderType: FodderType;
   fodderName: string;
-  quantity:   number;
+  quantity: number;
   costPerKg?: number;
   totalCost?: number;
-  notes?:     string;
-  createdAt:  string;
+  notes?: string;
+  createdAt: string;
 }
- 
+
 export interface FeedingPlan {
-  _id:           string;
-  animalId?:     string;
-  fodderType:    FodderType;
-  fodderName:    string;
+  _id: string;
+  animalId?: string;
+  fodderType: FodderType;
+  fodderName: string;
   dailyQuantity: number;
-  unit:          string;
-  costPerUnit?:  number;
-  isActive?:     boolean;
+  unit: string;
+  costPerUnit?: number;
+  isActive?: boolean;
 }
- 
+
 export interface DailyFeedBreakdown {
-  fodderType:    FodderType;
+  fodderType: FodderType;
   totalQuantity: number;
-  unit:          string;
-  dailyCost:     number;
+  unit: string;
+  dailyCost: number;
 }
- 
+
 export interface FeedingSummary {
-  animalId:          string;
-  currentPlan:       FeedingPlan[];
-  monthlyFeedCost:   number;
-  yearlyFeedCost:    number;
-  dailyFeedCost:     number;           
-  dailyBreakdown:    DailyFeedBreakdown[]; 
+  animalId: string;
+  currentPlan: FeedingPlan[];
+  monthlyFeedCost: number;
+  yearlyFeedCost: number;
+  dailyFeedCost: number;
+  dailyBreakdown: DailyFeedBreakdown[];
 }
- 
-// ─── Profitability ─────────────────────────────────────────────────────────────
- 
+
+// ─── Profitability ────────────────────────────────────────────────────────────
 export interface AnimalProfitability {
-  animalId:    string;
-  period:      string;
-  milkIncome:  number;
-  feedCost:    number;
+  animalId: string;
+  period: string;
+  milkIncome: number;
+  feedCost: number;
   medicalCost: number;
-  otherCost:   number;
-  netProfit:   number;
-  roi?:        number;
+  otherCost: number;
+  netProfit: number;
+  roi?: number;
 }
- 
-// ─── Fodder Module ─────────────────────────────────────────────────────────────
- 
+
+// ─── Fodder Module ────────────────────────────────────────────────────────────
 export interface FodderCrop {
-  _id:                  string;
-  cropName:             string;
-  variety?:             string;
-  area?:                number;
-  plantingDate?:        string;
+  _id: string;
+  cropName: string;
+  variety?: string;
+  area?: number;
+  plantingDate?: string;
   expectedHarvestDate?: string;
-  status:               'GROWING' | 'HARVESTED' | 'PLANNED';
-  expectedYield?:       number;
-  actualYield?:         number;
-  cost?:                number;
-  notes?:               string;
+  status: 'GROWING' | 'HARVESTED' | 'PLANNED';
+  expectedYield?: number;
+  actualYield?: number;
+  cost?: number;
+  notes?: string;
 }
- 
+
 export interface FodderStock {
-  _id:          string;
-  fodderType:   FodderType;
-  fodderName:   string;
-  quantity:     number;
-  unit:         string;
+  _id: string;
+  fodderType: FodderType;
+  fodderName: string;
+  quantity: number;
+  unit: string;
   costPerUnit?: number;
   purchaseDate?: string;
-  expiryDate?:  string;
-  supplier?:    string;
-  notes?:       string;
+  expiryDate?: string;
+  supplier?: string;
+  notes?: string;
 }
- 
-// ─── Herd Summary ──────────────────────────────────────────────────────────────
- 
+
+// ─── Herd Summary ─────────────────────────────────────────────────────────────
 export interface HerdSummary {
-  totalAnimals:      number;
-  byStatus:          Record<string, number>;
-  byType:            Record<AnimalType, number>;
-  milkingCount:      number;
-  todayMilk:         number;
-  monthlyMilk:       number;
-  avgMilkPerAnimal:  number;
-}
- 
-// ─── API Response Wrappers ─────────────────────────────────────────────────────
- 
-export interface ApiResponse<T> {
-  success: boolean;
-  data:    T;
-  message?: string;
-}
- 
-export interface PaginatedResponse<T> {
-  success: boolean;
-  data:    T[];
-  total:   number;
-  page:    number;
-  limit:   number;
-}
- 
-// ─── Shared ────────────────────────────────────────────────────────────────────
- 
-export interface SelectOption {
-  value: string;
-  label: string;
+  totalAnimals: number;
+  byStatus: Record<string, number>;
+  byType: Record<AnimalType, number>;
+  milkingCount: number;
+  todayMilk: number;
+  monthlyMilk: number;
+  avgMilkPerAnimal: number;
 }
 
-// ─── Shop / POS ──────────────────────────────────────────────────────────────
-
-export type PaymentMode = 'CASH' | 'UPI' | 'CARD' | 'CREDIT'
-export type BatchStatus = 'PROCESSING' | 'READY' | 'EXPIRED'
+// ─── Shop / POS ───────────────────────────────────────────────────────────────
+export type PaymentMode = 'CASH' | 'UPI' | 'CARD' | 'CREDIT';
+export type BatchStatus = 'PROCESSING' | 'READY' | 'EXPIRED';
 export type ProductType =
-  | 'PANEER'
-  | 'GHEE'
-  | 'DAHI'
-  | 'BUTTER'
-  | 'MAKKAN'
-  | 'KHOYA'
-  | 'CREAM'
-  | 'LASSI'
-  | 'KULFI'
-  | 'KHEER'
-  | 'ICE_CREAM'
-  | 'HOT_MILK'
-  | 'BAKERY'
-  | 'CHAAT'
-  | 'RESTAURANT'
+  | 'PANEER' | 'GHEE' | 'DAHI' | 'BUTTER' | 'MAKKAN' | 'KHOYA'
+  | 'CREAM' | 'LASSI' | 'KULFI' | 'KHEER' | 'ICE_CREAM'
+  | 'HOT_MILK' | 'BAKERY' | 'CHAAT' | 'RESTAURANT';
 
 export interface BatchInput {
-  milkLiters: number
-  milkSource: 'INTERNAL' | 'EXTERNAL'
-  avgFat: number
-  avgSNF: number
-  milkCost: number
+  milkLiters: number;
+  milkSource: 'INTERNAL' | 'EXTERNAL';
+  avgFat: number;
+  avgSNF: number;
+  milkCost: number;
 }
 
 export interface BatchCosts {
-  labor: number
-  fuel: number
-  ingredients: number
-  packaging: number
-  utilities: number
+  labor: number;
+  fuel: number;
+  ingredients: number;
+  packaging: number;
+  utilities: number;
 }
 
 export interface BatchOutput {
-  quantityProduced: number
-  wastage: number
+  quantityProduced: number;
+  wastage: number;
 }
 
 export interface BatchPricing {
-  costPerUnit: number
-  sellingPricePerUnit: number
+  costPerUnit: number;
+  sellingPricePerUnit: number;
 }
 
 export interface Batch {
-  _id: string
-  batchId: string
-  productType: ProductType
-  productionDate: string
-  expiryDate: string
-  input: BatchInput
-  costs: BatchCosts
-  output: BatchOutput
-  pricing: BatchPricing
-  stockRemaining: number
-  qualityScore: number
-  status: BatchStatus
-  createdAt: string
-  updatedAt: string
+  _id: string;
+  batchId: string;
+  productType: ProductType;
+  productionDate: string;
+  expiryDate: string;
+  input: BatchInput;
+  costs: BatchCosts;
+  output: BatchOutput;
+  pricing: BatchPricing;
+  stockRemaining: number;
+  qualityScore: number;
+  status: BatchStatus;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CreateBatchPayload {
-  productType: ProductType
-  productionDate: string
-  expiryDate: string
-  input: BatchInput
-  costs: BatchCosts
-  output: BatchOutput
-  pricing: BatchPricing
-  qualityScore?: number
+  productType: ProductType;
+  productionDate: string;
+  expiryDate: string;
+  input: BatchInput;
+  costs: BatchCosts;
+  output: BatchOutput;
+  pricing: BatchPricing;
+  qualityScore?: number;
 }
 
 export interface SaleItem {
-  productId: string
-  batchId: string
-  quantity: number
-  unitPrice: number
-  discount: number
-  total: number
+  productId: string;
+  batchId: string;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  total: number;
 }
 
 export interface Sale {
-  _id: string
-  saleId: string
-  dateTime: string
-  customerId?: string
-  customerName?: string
-  items: SaleItem[]
-  paymentMode: PaymentMode
-  totalAmount: number
-  createdBy: string
-  createdAt: string
+  _id: string;
+  saleId: string;
+  dateTime: string;
+  customerId?: string;
+  customerName?: string;
+  items: SaleItem[];
+  paymentMode: PaymentMode;
+  totalAmount: number;
+  createdBy: string;
+  createdAt: string;
 }
 
 export interface CreateSalePayload {
-  customerId?: string
-  customerName?: string
-  items: Omit<SaleItem, 'total'>[]
-  paymentMode: PaymentMode
+  customerId?: string;
+  customerName?: string;
+  items: Omit<SaleItem, 'total'>[];
+  paymentMode: PaymentMode;
 }
 
 export interface Product {
-  _id: string
-  productType: ProductType
-  name: string
-  unit: string         
-  currentStock: number
-  batches: Batch[]
+  _id: string;
+  productType: ProductType;
+  name: string;
+  unit: string;
+  currentStock: number;
+  batches: Batch[];
 }
 
 export interface ShopStats {
-  todaySales: number
-  todayRevenue: number
-  weekRevenue: number
-  monthRevenue: number
-  activeBatches: number
-  lowStockAlerts: number
-  topProduct: string
-  avgOrderValue: number
+  todaySales: number;
+  todayRevenue: number;
+  weekRevenue: number;
+  monthRevenue: number;
+  activeBatches: number;
+  lowStockAlerts: number;
+  topProduct: string;
+  avgOrderValue: number;
 }
 
 export interface RevenueDataPoint {
-  date: string
-  revenue: number
-  orders: number
+  date: string;
+  revenue: number;
+  orders: number;
 }
 
 export interface ProductSaleBreakdown {
-  productType: string
-  totalSold: number
-  totalRevenue: number
-  margin: number
+  productType: string;
+  totalSold: number;
+  totalRevenue: number;
+  margin: number;
 }
-
-// ─── Shared / Layout ─────────────────────────────────────────────────────────
 
 export interface NavItem {
-  label: string
-  path: string
-  icon: string
-  stage: number
-  children?: NavItem[]
-}
-
-export interface AlertItem {
-  id: string
-  type: 'warning' | 'error' | 'info'
-  message: string
-  module: string
-  timestamp: string
+  label: string;
+  path: string;
+  icon: string;
+  stage: number;
+  children?: NavItem[];
 }
