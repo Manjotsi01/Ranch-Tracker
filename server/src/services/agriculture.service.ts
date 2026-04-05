@@ -1,15 +1,15 @@
-// Path: ranch-tracker/server/src/services/agriculture.service.ts
-
 import Season from '../models/Season';
 import SeasonExpense from '../models/SeasonExpense';
 import YieldRecord from '../models/YieldRecord';
-import Field from '../models/Field';
+import { createError } from '../middleware/errorHandler';
+
+// ─── Crops ────────────────────────────────────────────────────────────────────
 
 export const getAllCrops = async () => {
-  const crops = await Season.aggregate([
+  return Season.aggregate([
     {
       $group: {
-        _id: '$cropId',
+        _id:                '$cropId',
         name:               { $first: '$cropName' },
         localName:          { $first: '$localName' },
         activeSeasonsCount: { $sum: { $cond: [{ $eq: ['$status', 'ACTIVE'] }, 1, 0] } },
@@ -35,8 +35,8 @@ export const getAllCrops = async () => {
         },
       },
     },
+    { $sort: { 'stats.totalRevenue': -1 } },
   ]);
-  return crops;
 };
 
 export const getCropById = async (cropId: string) => {
@@ -49,50 +49,60 @@ export const getCropById = async (cropId: string) => {
         localName:    { $first: '$localName' },
         totalExpense: { $sum: '$totalExpense' },
         totalRevenue: { $sum: '$totalRevenue' },
+        totalProfit:  { $sum: { $subtract: ['$totalRevenue', '$totalExpense'] } },
       },
     },
-    { $project: { cropId: '$_id', name: 1, localName: 1, totalExpense: 1, totalRevenue: 1 } },
+    {
+      $project: {
+        cropId: '$_id', name: 1, localName: 1,
+        totalExpense: 1, totalRevenue: 1, totalProfit: 1,
+      },
+    },
   ]);
-  return crop ?? null;
+  if (!crop) throw createError(`Crop '${cropId}' not found`, 404, 'CROP_NOT_FOUND');
+  return crop;
 };
 
 // ─── Seasons ──────────────────────────────────────────────────────────────────
 
-export const createSeason = async (data: any) => {
-  const season = await Season.create(data);
+export const createSeason = async (data: unknown) => Season.create(data);
+
+export const getSeasons = async () => Season.find().sort({ createdAt: -1 });
+
+export const getCropSeasons = async (cropId: string) =>
+  Season.find({ cropId }).sort({ startDate: -1 });
+
+export const getSeasonById = async (id: string) => {
+  const season = await Season.findById(id);
+  if (!season) throw createError('Season not found', 404, 'SEASON_NOT_FOUND');
   return season;
 };
 
-export const getSeasons = async () => {
-  return Season.find().sort({ createdAt: -1 });
-};
-
-export const getCropSeasons = async (cropId: string) => {
-  return Season.find({ cropId }).sort({ startDate: -1 });
-};
-
-export const getSeasonById = async (id: string) => {
-  return Season.findById(id);
-};
-export const updateSeason = async (id: string, data: any) => {
-  return Season.findByIdAndUpdate(id, data, { new: true });
+export const updateSeason = async (id: string, data: unknown) => {
+const season = await Season.findByIdAndUpdate(id, data as object, { new: true, runValidators: true });
+  if (!season) throw createError('Season not found', 404, 'SEASON_NOT_FOUND');
+  return season;
 };
 
 export const deleteSeason = async (id: string) => {
-  await SeasonExpense.deleteMany({ seasonId: id });
-  await YieldRecord.deleteMany({ seasonId: id });
-  await Season.findByIdAndDelete(id);
+  const season = await Season.findById(id);
+  if (!season) throw createError('Season not found', 404, 'SEASON_NOT_FOUND');
+  await Promise.all([
+    SeasonExpense.deleteMany({ seasonId: id }),
+    YieldRecord.deleteMany({ seasonId: id }),
+    Season.findByIdAndDelete(id),
+  ]);
 };
 
 // ─── Expenses ─────────────────────────────────────────────────────────────────
 
-export const getExpenses = async (seasonId: string) => {
-  return SeasonExpense.find({ seasonId }).sort({ date: -1 });
-};
+export const getExpenses = async (seasonId: string) =>
+  SeasonExpense.find({ seasonId }).sort({ date: -1 });
 
-export const addExpenseToSeason = async (seasonId: string, data: any) => {
+export const addExpenseToSeason = async (seasonId: string, data: Record<string, unknown>) => {
+  await getSeasonById(seasonId);
   const expense = await SeasonExpense.create({ ...data, seasonId });
-  await Season.findByIdAndUpdate(seasonId, { $inc: { totalExpense: data.amount } });
+  await Season.findByIdAndUpdate(seasonId, { $inc: { totalExpense: data.amount as number } });
   return expense;
 };
 
@@ -103,37 +113,41 @@ export const deleteExpense = async (seasonId: string, expenseId: string) => {
   }
 };
 
-// ─── Resources ────────────────────────────────────────────────────────────────
+// ─── Resources — not yet implemented ─────────────────────────────────────────
 
-export const getResources = async (seasonId: string) => {
-  return [];
+export const getResources = async (_seasonId: string): Promise<never[]> => [];
+
+export const addResource = async (_seasonId: string, _data: unknown): Promise<never> => {
+  throw createError('Resource management is not yet implemented', 501, 'NOT_IMPLEMENTED');
 };
 
-export const addResource = async (seasonId: string, data: any) => {
-  return { ...data, seasonId, resourceId: `res_${Date.now()}` };
-};
-
-export const deleteResource = async (seasonId: string, resourceId: string) => {
-   
+export const deleteResource = async (_seasonId: string, _resourceId: string): Promise<never> => {
+  throw createError('Resource management is not yet implemented', 501, 'NOT_IMPLEMENTED');
 };
 
 // ─── Yields ───────────────────────────────────────────────────────────────────
 
-export const getYields = async (seasonId: string) => {
-  return YieldRecord.find({ seasonId }).sort({ date: -1 });
-};
+export const getYields = async (seasonId: string) =>
+  YieldRecord.find({ seasonId }).sort({ date: -1 });
 
-export const addYieldToSeason = async (seasonId: string, data: any) => {
-  const revenueValue = data.revenue ?? data.revenueRealized ?? 0;
-  const yieldRecord = await YieldRecord.create({ ...data, revenueRealized: revenueValue, seasonId });
-  await Season.findByIdAndUpdate(seasonId, { $inc: { totalRevenue: revenueValue } });
-  return yieldRecord;
+export const addYieldToSeason = async (seasonId: string, data: Record<string, unknown>) => {
+  await getSeasonById(seasonId);
+  const revenue = Number(data.revenueRealized ?? data.revenue ?? 0);
+  const record  = await YieldRecord.create({ ...data, revenueRealized: revenue, seasonId });
+  await Season.findByIdAndUpdate(seasonId, {
+    $inc: { totalRevenue: revenue, totalYield: Number(data.quantity ?? 0) },
+  });
+  return record;
 };
 
 export const deleteYield = async (seasonId: string, yieldId: string) => {
   const record = await YieldRecord.findByIdAndDelete(yieldId);
   if (record) {
-    const amount = (record as any).revenueRealized ?? (record as any).revenue ?? 0;
-    await Season.findByIdAndUpdate(seasonId, { $inc: { totalRevenue: -amount } });
+    await Season.findByIdAndUpdate(seasonId, {
+      $inc: {
+        totalRevenue: -record.revenueRealized,
+        totalYield:   -(record.quantity ?? 0),
+      },
+    });
   }
 };

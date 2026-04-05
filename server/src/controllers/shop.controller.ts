@@ -1,25 +1,23 @@
-// server/src/controllers/shop.controller.ts
 import { Request, Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import { sendSuccess } from '../utils/response';
 import * as shopService from '../services/shop.service';
 
-// ── Stats ─────────────────────────────────────────────────────────────────────
+// ── Stats ──────────────────────────────────────────────────────────────────────
 export const getStatsHandler = asyncHandler(async (_req: Request, res: Response) => {
   const data = await shopService.getStats();
   sendSuccess(res, data);
 });
 
-// ── Batches ───────────────────────────────────────────────────────────────────
+// ── Batches ────────────────────────────────────────────────────────────────────
 export const getBatchesHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { status, productType } = req.query as Record<string, string>;
+  const { status, productType } = req.query as { status?: string; productType?: string };
   const data = await shopService.getBatches({ status, productType });
   sendSuccess(res, data);
 });
 
 export const getBatchByIdHandler = asyncHandler(async (req: Request, res: Response) => {
   const data = await shopService.getBatchById(req.params.id);
-  if (!data) { res.status(404).json({ success: false, message: 'Batch not found' }); return; }
   sendSuccess(res, data);
 });
 
@@ -38,39 +36,41 @@ export const deleteBatchHandler = asyncHandler(async (req: Request, res: Respons
   sendSuccess(res, { deleted: true });
 });
 
-// ── Sales ─────────────────────────────────────────────────────────────────────
+// ── Sales ──────────────────────────────────────────────────────────────────────
 export const getSalesHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { page, limit, from, to, paymentMode } = req.query as Record<string, string>;
+  const { page, limit, from, to, paymentMode } = req.query as {
+    page?: string; limit?: string; from?: string; to?: string; paymentMode?: string;
+  };
   const data = await shopService.getSales({
-    page: page ? Number(page) : undefined,
-    limit: limit ? Number(limit) : undefined,
-    from, to, paymentMode,
+    page:        page  ? Number(page)  : undefined,
+    limit:       limit ? Number(limit) : undefined,
+    from,
+    to,
+    paymentMode,
   });
   sendSuccess(res, data);
 });
 
 export const getSaleByIdHandler = asyncHandler(async (req: Request, res: Response) => {
   const data = await shopService.getSaleById(req.params.id);
-  if (!data) { res.status(404).json({ success: false, message: 'Sale not found' }); return; }
   sendSuccess(res, data);
 });
 
 export const posSaleHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { items, paymentMode, customerName, customerId } = req.body;
-  const result = await shopService.createPosSale(items, paymentMode, customerName, customerId);
-  sendSuccess(res, result, 201);
+  const data = await shopService.createPosSale(req.body);
+  sendSuccess(res, data, 201);
 });
 
-// ── Reports ───────────────────────────────────────────────────────────────────
+// ── Reports ────────────────────────────────────────────────────────────────────
 export const getRevenueChartHandler = asyncHandler(async (req: Request, res: Response) => {
   const { period } = req.query as { period?: 'week' | 'month' | 'year' };
-  const data = await shopService.getRevenueChart(period);
+  const data = await shopService.getRevenueChart({ period });
   sendSuccess(res, data);
 });
 
 export const getProductBreakdownHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { from, to } = req.query as Record<string, string>;
-  const data = await shopService.getProductBreakdown(from, to);
+  const { from, to } = req.query as { from?: string; to?: string };
+  const data = await shopService.getProductBreakdown({ from, to });
   sendSuccess(res, data);
 });
 

@@ -1,18 +1,27 @@
 // Path: ranch-tracker/server/src/config/db.ts
 
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
+import { env } from './env';
 import logger from '../utils/logger';
 
-dotenv.config();
-
-export const connectDB = async () => {
+export const connectDB = async (): Promise<void> => {
   try {
-    const uri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ranchtracker';
-    const conn = await mongoose.connect(uri);
-    logger.info(`MongoDB Connected: ${conn.connection.host}`);
-  } catch (error: any) {
-    logger.error(`MongoDB connection error: ${error.message}`);
+    mongoose.set('strictQuery', true);
+    const conn = await mongoose.connect(env.MONGO_URI, {
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS:          45_000,
+    });
+    logger.info(`MongoDB connected: ${conn.connection.host}`);
+
+    mongoose.connection.on('error', (err) => {
+      logger.error(`MongoDB runtime error: ${err.message}`);
+    });
+
+    mongoose.connection.on('disconnected', () => {
+      logger.warn('MongoDB disconnected — attempting reconnect');
+    });
+  } catch (error: unknown) {
+    logger.error(`MongoDB connection failed: ${(error as Error).message}`);
     process.exit(1);
   }
 };

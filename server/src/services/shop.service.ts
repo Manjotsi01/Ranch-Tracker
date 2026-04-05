@@ -1,183 +1,163 @@
-// server/src/services/shop.service.ts
 import mongoose from 'mongoose';
 import Batch from '../models/Batch';
 import { SaleModel as Sale } from '../models/Sale';
 
 // ── Helper ────────────────────────────────────────────────────────────────────
-const startOfDay  = (d = new Date()) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-const startOfWeek = () => { const d = startOfDay(); d.setDate(d.getDate() - 6); return d; };
-const startOfMonth= () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); };
+
+const startOfDay = (d = new Date()) =>
+  new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+const endOfDay = (d = new Date()) =>
+  new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
-export const getStats = async () => {
-  const [todayAgg, weekAgg, activeBatches, lowStock] = await Promise.all([
-    Sale.aggregate([
-      { $match: { dateTime: { $gte: startOfDay() } } },
-      { $group: { _id: null, revenue: { $sum: '$totalAmount' }, count: { $sum: 1 } } },
-    ]),
-    Sale.aggregate([
-      { $match: { dateTime: { $gte: startOfWeek() } } },
-      { $group: { _id: null, revenue: { $sum: '$totalAmount' } } },
-    ]),
-    Batch.countDocuments({ status: { $in: ['PROCESSING', 'READY'] } }),
-    Batch.countDocuments({ status: 'READY', stockRemaining: { $lte: 5 } }),
-  ]);
 
-  const todayTop = await Sale.aggregate([
-    { $match: { dateTime: { $gte: startOfDay() } } },
-    { $unwind: '$items' },
-    { $group: { _id: '$items.productId', rev: { $sum: '$items.total' } } },
-    { $sort: { rev: -1 } },
-    { $limit: 1 },
+export const getStats = async () => {
+  const today = startOfDay();
+
+  const [totalBatches, activeBatches, todaySales, totalRevenue] = await Promise.all([
+    Batch.countDocuments(),
+    Batch.countDocuments({ status: { $in: ['PROCESSING', 'READY'] } }),
+    Sale.countDocuments({ dateTime: { $gte: today } }),
+    Sale.aggregate([{ $group: { _id: null, total: { $sum: '$totalAmount' } } }]),
   ]);
 
   return {
-    todaySales:     todayAgg[0]?.count     ?? 0,
-    todayRevenue:   todayAgg[0]?.revenue   ?? 0,
-    weekRevenue:    weekAgg[0]?.revenue    ?? 0,
+    totalBatches,
     activeBatches,
-    lowStockAlerts: lowStock,
-    topProduct:     todayTop[0]?._id       ?? '',
-    avgOrderValue:  todayAgg[0]?.count
-      ? (todayAgg[0].revenue / todayAgg[0].count)
-      : 0,
+    todaySales,
+    totalRevenue: totalRevenue[0]?.total ?? 0,
   };
 };
-export const getBatches = async (filters: {
-  status?: string;
-  productType?: string;
-}) => {
-  const query: Record<string, unknown> = {};
-  if (filters.status)      query.status      = filters.status;
-  if (filters.productType) query.productType = filters.productType;
-  return Batch.find(query).sort({ createdAt: -1 });
+
+// ── Batches ───────────────────────────────────────────────────────────────────
+
+export const getBatches = async (
+  query: { status?: string; productType?: string } = {},
+) => {
+  const filter: Record<string, unknown> = {};
+  if (query.status)      filter.status      = query.status;
+  if (query.productType) filter.productType = query.productType;
+  return Batch.find(filter).sort({ productionDate: -1 });
 };
 
-export const getBatchById = async (id: string) => Batch.findById(id);
+export const getBatchById = async (id: string) => {
+  return Batch.findById(id);
+};
 
-export const createBatch = async (data: any) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-  try {
-    const costs = data.costs ?? {};
-    const totalCost =
-      (data.input?.milkCost   ?? 0) +
-      (costs.labor             ?? 0) +
-      (costs.fuel              ?? 0) +
-      (costs.ingredients       ?? 0) +
-      (costs.packaging         ?? 0) +
-      (costs.utilities         ?? 0);
-
-    const qty = data.output?.quantityProduced ?? 0;
-    const costPerUnit = qty > 0 ? totalCost / qty : 0;
-
-    const batch = new Batch({
-      ...data,
-      pricing: { ...data.pricing, costPerUnit },
-      stockRemaining: qty,
-      status: data.status ?? 'PROCESSING',
-    });
-
-    await batch.save({ session });
-    await session.commitTransaction();
-    return batch;
-  } catch (err) {
-    await session.abortTransaction();
-    throw err;
-  } finally {
-    session.endSession();
+export const createBatch = async (data: unknown) => {
+  const batch = await Batch.create(data);
+  // Initialise stockRemaining from output if not supplied
+  if (!batch.stockRemaining) {
+   batch.stockRemaining = (batch.output?.quantityProduced ?? 0) - (batch.output?.wastage ?? 0);
+    await batch.save();
   }
+  return batch;
 };
 
-export const updateBatch = async (id: string, data: any) => {
-  const batch = await Batch.findByIdAndUpdate(id, { $set: data }, { new: true, runValidators: true });
-  if (!batch) throw new Error('Batch not found');
-  return batch;
+export const updateBatch = async (id: string, data: unknown) => {
+  return Batch.findByIdAndUpdate(id, data as object, {
+    new: true,
+    runValidators: true,
+  });
 };
 
 export const deleteBatch = async (id: string) => {
-  const batch = await Batch.findByIdAndDelete(id);
-  if (!batch) throw new Error('Batch not found');
-  return batch;
+  return Batch.findByIdAndDelete(id);
 };
 
 // ── Sales ─────────────────────────────────────────────────────────────────────
-export const getSales = async (params: {
-  page?: number;
-  limit?: number;
-  from?: string;
-  to?: string;
-  paymentMode?: string;
-}) => {
-  const { page = 1, limit = 20, from, to, paymentMode } = params;
-  const query: Record<string, unknown> = {};
-  if (from || to) {
-    query.dateTime = {
-      ...(from ? { $gte: new Date(from) } : {}),
-      ...(to   ? { $lte: new Date(to + 'T23:59:59') } : {}),
+
+export const getSales = async (
+  query: {
+    page?: number;
+    limit?: number;
+    from?: string;
+    to?: string;
+    paymentMode?: string;
+  } = {},
+) => {
+  const page  = Number(query.page  ?? 1);
+  const limit = Number(query.limit ?? 20);
+  const skip  = (page - 1) * limit;
+
+  const filter: Record<string, unknown> = {};
+  if (query.paymentMode) filter.paymentMode = query.paymentMode;
+  if (query.from || query.to) {
+    filter.dateTime = {
+      ...(query.from ? { $gte: new Date(query.from) } : {}),
+      ...(query.to   ? { $lte: new Date(query.to)   } : {}),
     };
   }
-  if (paymentMode) query.paymentMode = paymentMode;
-
-  const [data, total] = await Promise.all([
-    Sale.find(query).sort({ dateTime: -1 }).skip((page - 1) * limit).limit(limit),
-    Sale.countDocuments(query),
+  const [sales, total] = await Promise.all([
+    Sale.find(filter).sort({ dateTime: -1 }).skip(skip).limit(limit),
+    Sale.countDocuments(filter),
   ]);
-  return { data, total, page, limit };
+
+  return { sales, total, page, pages: Math.ceil(total / limit) };
 };
 
-export const getSaleById = async (id: string) => Sale.findById(id);
+export const getSaleById = async (id: string) => {
+  return Sale.findById(id);
+};
 
-export const createPosSale = async (
-  items: Array<{
-    productId: string;   // productType string, e.g. "PANEER"
-    batchId: string;
-    quantity: number;
-    unitPrice: number;
-    discount: number;
-  }>,
-  paymentMode: string,
-  customerName?: string,
-  customerId?: string,
-) => {
+export const createPosSale = async (data: {
+  items: { batchId: string; quantity: number; unitPrice: number; discount?: number }[];
+  paymentMode: string;
+  customerName?: string;
+  customerId?: string;
+}) => {
   const session = await mongoose.startSession();
   session.startTransaction();
-  try {
-    const saleItems: any[] = [];
-    let totalAmount = 0;
 
-    for (const item of items) {
+  try {
+    let totalAmount = 0;
+    const saleItems = [];
+
+    for (const item of data.items) {
       const batch = await Batch.findById(item.batchId).session(session);
       if (!batch) throw new Error(`Batch ${item.batchId} not found`);
-      if (batch.status === 'EXPIRED') throw new Error(`Batch ${batch.batchId} is expired`);
-      if (batch.stockRemaining < item.quantity)
-        throw new Error(`Insufficient stock in batch ${batch.batchId}`);
+      if (batch.stockRemaining < item.quantity) {
+        throw new Error(
+          `Insufficient stock for batch ${batch.batchId}: ` +
+          `requested ${item.quantity}, available ${batch.stockRemaining}`,
+        );
+      }
 
-      batch.stockRemaining -= item.quantity;
-      if (batch.stockRemaining === 0) batch.status = 'EXPIRED';
-      await batch.save({ session });
-
-      const lineTotal = item.unitPrice * item.quantity * (1 - (item.discount ?? 0) / 100);
+      const discount = item.discount ?? 0;
+      const lineTotal = item.quantity * item.unitPrice * (1 - discount / 100);
       totalAmount += lineTotal;
 
       saleItems.push({
-        productId: item.productId,
+        productId: batch.productType,
         batchId:   batch._id,
         quantity:  item.quantity,
         unitPrice: item.unitPrice,
-        discount:  item.discount ?? 0,
+        discount,
         total:     lineTotal,
       });
+
+      await Batch.findByIdAndUpdate(
+        item.batchId,
+        { $inc: { stockRemaining: -item.quantity } },
+        { session },
+      );
     }
 
-    const sale = new Sale({
-      items: saleItems,
-      paymentMode,
-      totalAmount,
-      customerName,
-      customerId,
-    });
-    await sale.save({ session });
+    const [sale] = await Sale.create(
+      [
+        {
+          items:        saleItems,
+          totalAmount,
+          paymentMode:  data.paymentMode,
+          customerName: data.customerName,
+          customerId:   data.customerId,
+          dateTime:     new Date(),
+        },
+      ],
+      { session },
+    );
+
     await session.commitTransaction();
     return sale;
   } catch (err) {
@@ -189,76 +169,85 @@ export const createPosSale = async (
 };
 
 // ── Reports ───────────────────────────────────────────────────────────────────
-export const getRevenueChart = async (period: 'week' | 'month' | 'year' = 'week') => {
-  const days   = period === 'week' ? 7 : period === 'month' ? 30 : 365;
-  const from   = new Date(Date.now() - days * 86400000);
 
-  const raw = await Sale.aggregate([
+export const getRevenueChart = async (
+  query: { period?: 'week' | 'month' | 'year' } = {},
+) => {
+  const period = query.period ?? 'month';
+  const now    = new Date();
+
+  const from =
+    period === 'week'  ? new Date(now.getTime() - 7  * 86_400_000) :
+    period === 'year'  ? new Date(now.getTime() - 365 * 86_400_000) :
+    new Date(now.getTime() - 30 * 86_400_000);
+
+  const fmt =
+    period === 'year' ? '%Y-%m' : '%Y-%m-%d';
+
+  return Sale.aggregate([
     { $match: { dateTime: { $gte: from } } },
     {
       $group: {
-        _id: {
-          $dateToString: { format: '%Y-%m-%d', date: '$dateTime', timezone: '+05:30' }
-        },
+        _id:     { $dateToString: { format: fmt, date: '$dateTime' } },
         revenue: { $sum: '$totalAmount' },
-        orders:  { $sum: 1 },
+        count:   { $sum: 1 },
       },
     },
     { $sort: { _id: 1 } },
+    { $project: { date: '$_id', revenue: 1, count: 1, _id: 0 } },
   ]);
-
-  // Fill missing days with zero
-  const map = new Map(raw.map((r: any) => [r._id, r]));
-  const result = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d    = new Date(Date.now() - i * 86400000);
-    const key  = d.toISOString().slice(0, 10);
-    const entry: any = map.get(key);
-    result.push({ date: key, revenue: entry?.revenue ?? 0, orders: entry?.orders ?? 0 });
-  }
-  return result;
 };
 
-export const getProductBreakdown = async (from?: string, to?: string) => {
-  const match: Record<string, unknown> = {};
-  if (from || to) {
-    match.dateTime = {
-      ...(from ? { $gte: new Date(from) } : {}),
-      ...(to   ? { $lte: new Date(to + 'T23:59:59') } : {}),
+export const getProductBreakdown = async (
+  query: { from?: string; to?: string } = {},
+) => {
+  const filter: Record<string, unknown> = {};
+  if (query.from || query.to) {
+    filter.dateTime = {
+      ...(query.from ? { $gte: new Date(query.from) } : {}),
+      ...(query.to   ? { $lte: new Date(query.to)   } : {}),
     };
   }
 
   return Sale.aggregate([
-    ...(Object.keys(match).length ? [{ $match: match }] : []),
+    { $match: filter },
     { $unwind: '$items' },
     {
       $group: {
-        _id:          '$items.productId',
-        totalSold:    { $sum: '$items.quantity' },
-        totalRevenue: { $sum: '$items.total' },
+        _id:      '$items.productId',
+        revenue:  { $sum: '$items.total' },
+        quantity: { $sum: '$items.quantity' },
+        orders:   { $sum: 1 },
       },
     },
-    { $project: { _id: 0, productType: '$_id', totalSold: 1, totalRevenue: 1 } },
-    { $sort: { totalRevenue: -1 } },
+    { $sort: { revenue: -1 } },
+    { $project: { product: '$_id', revenue: 1, quantity: 1, orders: 1, _id: 0 } },
   ]);
 };
 
 export const getDailyReport = async (dateStr?: string) => {
-  const day   = dateStr ? new Date(dateStr) : new Date();
-  const start = startOfDay(day);
-  const end   = new Date(start.getTime() + 86400000);
+  const date = dateStr ? new Date(dateStr) : new Date();
+  const from = startOfDay(date);
+  const to   = endOfDay(date);
 
-  const [sales, revenue] = await Promise.all([
-    Sale.find({ dateTime: { $gte: start, $lt: end } }).sort({ dateTime: -1 }),
-    Sale.aggregate([
-      { $match: { dateTime: { $gte: start, $lt: end } } },
-      { $group: { _id: null, total: { $sum: '$totalAmount' }, count: { $sum: 1 } } },
-    ]),
+  const [sales, batchesMade] = await Promise.all([
+    Sale.find({ dateTime: { $gte: from, $lte: to } }),
+    Batch.find({ productionDate: { $gte: from, $lte: to } }),
   ]);
 
+  const totalRevenue    = sales.reduce((s, r) => s + r.totalAmount, 0);
+  const totalTransactions = sales.length;
+  const byPaymentMode   = sales.reduce<Record<string, number>>((acc, s) => {
+    acc[s.paymentMode] = (acc[s.paymentMode] ?? 0) + s.totalAmount;
+    return acc;
+  }, {});
+
   return {
-    date:    start.toISOString().slice(0, 10),
+    date: from,
+    totalRevenue,
+    totalTransactions,
+    byPaymentMode,
+    batchesProduced: batchesMade.length,
     sales,
-    summary: { total: revenue[0]?.total ?? 0, count: revenue[0]?.count ?? 0 },
   };
 };

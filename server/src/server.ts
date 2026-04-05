@@ -1,103 +1,100 @@
-import dotenv from 'dotenv';
-dotenv.config();
-
-import express from 'express';
+import './config/env';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import mongoSanitize from 'express-mongo-sanitize';
+import compression from 'compression';
+import { env } from './config/env';
 import { connectDB } from './config/db';
-
-import agricultureRoutes from './routes/agriculture.routes';
-import dashboardRoutes from './routes/dashboard.routes';
-import dairyRoutes from './routes/dairy.routes';
-import shopRoutes from './routes/shop.routes';
-
 import { errorHandler } from './middleware/errorHandler';
+import { apiLimiter } from './middleware/rateLimiter';
 import logger from './utils/logger';
+
+import authRoutes       from './routes/auth.routes';
+import dashboardRoutes  from './routes/dashboard.routes';
+import dairyRoutes      from './routes/dairy.routes';
+import shopRoutes       from './routes/shop.routes';
+import agricultureRoutes from './routes/agriculture.routes';
 
 const app = express();
 
-// ─── ENV CONFIG ─────────────────────────────────────────────
-const PORT = process.env.PORT || 5000;
-const BASE_API = process.env.BASE_API || '/api';
-
-// ─── VALIDATE ENV ───────────────────────────────────────────
-if (!process.env.MONGO_URI) {
-  console.error("❌ MONGO_URI is missing in environment variables");
-  process.exit(1);
-}
-
-// ─── CORS CONFIG (FIXED) ────────────────────────────────────
+// ── 1. CORS — must be FIRST, before everything else ──────────────────────────
+// This is why your requests were blocked: CORS was either missing or
+// registered after other middleware, so OPTIONS preflight never got a response.
 const allowedOrigins = [
-  process.env.CLIENT_ORIGIN,
-  'https://ranch-tracker.vercel.app',
-  'http://localhost:5173',
-].filter(Boolean);
+  env.CLIENT_ORIGIN,                    // https://ranch-tracker.vercel.app
+  'http://localhost:5173',              // Vite dev
+  'http://localhost:3000',              // CRA dev fallback
+];
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, Postman)
+    // Allow requests with no origin (Postman, server-to-server, curl)
     if (!origin) return callback(null, true);
-
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-    console.log("❌ Blocked by CORS:", origin);
-    return callback(new Error(`CORS blocked: ${origin}`));
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    logger.warn(`CORS blocked request from origin: ${origin}`);
+    callback(new Error(`CORS: origin ${origin} is not allowed`));
   },
-  credentials: true,
+  methods:            ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders:     ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders:     ['X-Total-Count'],
+  credentials:        true,   // allow cookies / Authorization header
+  optionsSuccessStatus: 200,  // some legacy browsers choke on 204
+  maxAge:             86_400, // cache preflight for 24 h
 }));
 
-// ─── BODY PARSER ────────────────────────────────────────────
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Explicitly handle OPTIONS for all routes (required for credentials:true)
+app.options('*', cors());
 
-// ─── ROUTES ─────────────────────────────────────────────────
-app.use(`${BASE_API}/dashboard`, dashboardRoutes);
-app.use(`${BASE_API}/agriculture`, agricultureRoutes);
-app.use(`${BASE_API}/dairy`, dairyRoutes);
-app.use(`${BASE_API}/shop`, shopRoutes);
+// ── 2. Security headers ───────────────────────────────────────────────────────
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 
-// ─── HEALTH CHECK ───────────────────────────────────────────
-app.get(`${BASE_API}/health`, (_, res) => {
-  res.status(200).json({
-    success: true,
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-  });
+// ── 3. Body parsing ───────────────────────────────────────────────────────────
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+
+// ── 4. Sanitize & compress ────────────────────────────────────────────────────
+app.use(mongoSanitize());
+app.use(compression());
+
+// ── 5. Rate limiting ──────────────────────────────────────────────────────────
+app.use(env.BASE_API, apiLimiter);
+
+// ── 6. Health check (no auth required) ───────────────────────────────────────
+app.get('/health', (_req: Request, res: Response) => {
+  res.json({ status: 'ok', env: env.NODE_ENV, ts: new Date().toISOString() });
 });
 
-// ─── ROOT ROUTE ─────────────────────────────────────────────
-app.get('/', (_, res) => {
-  res.send('🚀 Ranch Tracker API is running');
+// ── 7. API routes ─────────────────────────────────────────────────────────────
+const api = env.BASE_API; // '/api'
+app.use(`${api}/auth`,        authRoutes);
+app.use(`${api}/dashboard`,   dashboardRoutes);
+app.use(`${api}/dairy`,       dairyRoutes);
+app.use(`${api}/shop`,        shopRoutes);
+app.use(`${api}/agriculture`, agricultureRoutes);
+
+// ── 8. 404 handler ────────────────────────────────────────────────────────────
+app.use((_req: Request, res: Response) => {
+  res.status(404).json({ success: false, message: 'Route not found' });
 });
 
-// ─── 404 HANDLER ────────────────────────────────────────────
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: `Route not found: ${req.method} ${req.originalUrl}`,
-  });
-});
-
-// ─── ERROR HANDLER ──────────────────────────────────────────
+// ── 9. Global error handler — must be last ────────────────────────────────────
 app.use(errorHandler);
 
-// ─── START SERVER ───────────────────────────────────────────
-const startServer = async () => {
-  try {
-    await connectDB();
-
-    app.listen(PORT, () => {
-      logger.info(`🚀 Server running on port ${PORT}`);
-      logger.info(`🌐 API Base: ${BASE_API}`);
-    });
-
-  } catch (error) {
-    logger.error("❌ Failed to start server:", ); // FIXED
-    process.exit(1);
-  }
+// ── 10. Start ─────────────────────────────────────────────────────────────────
+const start = async () => {
+  await connectDB();
+  app.listen(env.PORT, () => {
+    logger.info(`Server running on port ${env.PORT} [${env.NODE_ENV}]`);
+    logger.info(`CORS allowed origins: ${allowedOrigins.join(', ')}`);
+  });
 };
 
-startServer();
+start().catch((err) => {
+  logger.error('Fatal startup error:', err);
+  process.exit(1);
+});
 
 export default app;

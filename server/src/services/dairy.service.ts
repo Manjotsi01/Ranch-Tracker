@@ -1,440 +1,290 @@
-// server/src/services/dairy.service.ts
-import mongoose from 'mongoose'
-import Animal from '../models/Animal'
-import MilkRecord from '../models/MilkRecord'
-import HealthRecord from '../models/HealthRecord'
-import FeedRecord from '../models/FeedRecord'
-import FodderStock from '../models/FodderStock'
-import ReproductionRecord from '../models/ReproductionRecord'
+import Animal from '../models/Animal';
+import MilkRecord from '../models/MilkRecord';
+import HealthRecord from '../models/HealthRecord';
+import FeedRecord from '../models/FeedRecord';
+import FodderStock from '../models/FodderStock';
+import ReproductionRecord from '../models/ReproductionRecord';
+import { createError } from '../middleware/errorHandler';
+import { env } from '../config/env';
 
-type Params = Record<string, string>
+// ── Herd ──────────────────────────────────────────────────────────────────────
 
-// ── Herd Summary ──────────────────────────────────────────────────────────────
 export const getHerdSummary = async () => {
-  const animals = await Animal.find()
+  const [total, byStatus, byType] = await Promise.all([
+    Animal.countDocuments(),
+    Animal.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+    Animal.aggregate([{ $group: { _id: '$type',   count: { $sum: 1 } } }]),
+  ]);
+  return { total, byStatus, byType };
+};
 
-  const byType:   Record<string, number> = {}
-  const byStatus: Record<string, number> = {}
+// ── Animals ───────────────────────────────────────────────────────────────────
 
-  animals.forEach((a) => {
-    const t = (a as any).type   || 'COW'
-    const s = (a as any).status || 'CALF'
-    byType[t]   = (byType[t]   || 0) + 1
-    byStatus[s] = (byStatus[s] || 0) + 1
-  })
-
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const todayRecords = await MilkRecord.find({ date: { $gte: today } })
-  const todayMilk = todayRecords.reduce((s, r: any) => {
-    // Support both storage patterns
-    const qty = r.quantity ?? ((r.morning || 0) + (r.evening || 0))
-    return s + qty
-  }, 0)
-
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
-  const monthRecords = await MilkRecord.find({ date: { $gte: monthStart } })
-  const monthlyMilk = monthRecords.reduce((s, r: any) => {
-    const qty = r.quantity ?? ((r.morning || 0) + (r.evening || 0))
-    return s + qty
-  }, 0)
-
-  const milkingCount       = byStatus['MILKING'] || 0
-  const avgMilkPerAnimal   = milkingCount > 0 ? todayMilk / milkingCount : 0
-
-  return { totalAnimals: animals.length, byType, byStatus, todayMilk, monthlyMilk, milkingCount, avgMilkPerAnimal }
-}
-
-// ── Animals ──────────────────────────────────────────────────────
-const LEGACY_STATUS: Record<string, string> = {
-  'Milking':  'LACTATING',
-  'milking':  'LACTATING',
-  'MILKING':  'LACTATING',  
-  'Dry':      'DRY',
-  'Calf':     'CALF',
-  'Heifer':   'HEIFER',
-  'Sold':     'SOLD',
-  'Dead':     'DEAD',
-}
-
-const normaliseAnimal = (a: any) => {
-  if (!a) return a
-  const obj = a.toObject ? a.toObject() : { ...a }
-
-  if (!obj.type) obj.type = 'COW'
-  else obj.type = String(obj.type).toUpperCase()
-
-  if (!obj.tagNo) obj.tagNo = obj.tagNumber || obj.animalId || ''
-
-  if (obj.status) {
-    obj.status = LEGACY_STATUS[obj.status] ?? String(obj.status).toUpperCase()
-  } else {
-    obj.status = 'CALF'
-  }
-
-  if (obj.gender === 'Female') obj.gender = 'FEMALE'
-  if (obj.gender === 'Male')   obj.gender = 'MALE'
-  if (!obj.gender) obj.gender = 'FEMALE'
-
-  if (!obj.bloodline) obj.bloodline = {}
-
-  return obj
-}
-
-export const getAnimals = async (params: Params) => {
-  const filter: Record<string, unknown> = {}
-  if (params.type)   filter.type   = params.type
-  if (params.status) filter.status = params.status
-  const docs = await Animal.find(filter).sort({ createdAt: -1 })
-  return docs.map(normaliseAnimal)
-}
+export const getAnimals = async (query: Record<string, string> = {}) => {
+  const filter: Record<string, unknown> = {};
+  if (query.status) filter.status = query.status;
+  if (query.type)   filter.type   = query.type;
+  if (query.gender) filter.gender = query.gender;
+  return Animal.find(filter).sort({ createdAt: -1 });
+};
 
 export const getAnimalById = async (id: string) => {
-  const doc = await Animal.findById(id)
-  return normaliseAnimal(doc)
-}
+  return Animal.findById(id);
+};
 
-export const createAnimal = async (body: Record<string, unknown>) => {
-  let gender = String(body.gender || 'FEMALE')
-  if (gender === 'Female') gender = 'FEMALE'
-  if (gender === 'Male')   gender = 'MALE'
-  let status = String(body.status || 'CALF').toUpperCase()
+export const createAnimal = async (data: unknown) => {
+  return Animal.create(data);
+};
 
-  const doc = {
-    ...body,
-    gender,
-    status,
-    tagNo:     body.tagNo     || body.tagNumber,
-    tagNumber: body.tagNumber || body.tagNo,
-    type:      body.type      || 'COW',
-    purchaseCost:  body.purchaseCost  ?? body.purchasePrice,
-    purchasePrice: body.purchasePrice ?? body.purchaseCost,
-    currentWeight: body.currentWeight ?? body.weight,
-    weight:        body.weight        ?? body.currentWeight,
-  }
-  return Animal.create(doc)
-}
+export const updateAnimal = async (id: string, data: unknown) => {
+  return Animal.findByIdAndUpdate(id, data as object, { new: true, runValidators: true });
+};
 
-export const updateAnimal = async (id: string, body: Record<string, unknown>) => {
-  return Animal.findByIdAndUpdate(id, body, { new: true, runValidators: true })
-}
-
-export const deleteAnimal = async (id: string) => Animal.findByIdAndDelete(id)
+export const deleteAnimal = async (id: string) => {
+  return Animal.findByIdAndDelete(id);
+};
 
 // ── Milk ──────────────────────────────────────────────────────────────────────
-export const getMilkRecords = async (animalId: string, params: Params) => {
-  const filter: Record<string, unknown> = { animalId }
-  if (params.from) filter.date = { $gte: new Date(params.from) }
-  if (params.to)   filter.date = { ...(filter.date as object), $lte: new Date(params.to) }
 
-  const records = await MilkRecord.find(filter).sort({ date: -1 })
-  return records.map((r: any) => ({
-    _id:      r._id,
-    date:     r.date,
-    session:  r.session  || (r.morning > 0 ? 'MORNING' : 'EVENING'),
-    quantity: r.quantity ?? ((r.morning || 0) + (r.evening || 0)),
-    fat:      r.fat,
-    snf:      r.snf,
-    notes:    r.notes,
-  }))
-}
+export const getMilkRecords = async (
+  animalId: string,
+  query: Record<string, string> = {},
+) => {
+  const filter: Record<string, unknown> = { animalId };
+  if (query.from || query.to) {
+    filter.date = {
+      ...(query.from ? { $gte: new Date(query.from) } : {}),
+      ...(query.to   ? { $lte: new Date(query.to)   } : {}),
+    };
+  }
+  return MilkRecord.find(filter).sort({ date: -1 });
+};
 
-export const getMilkSummary = async (animalId: string, _params: Params) => {
-  const records = await MilkRecord.find({ animalId }).sort({ date: 1 })
-  const map = new Map<string, { date: string; morning: number; evening: number; total: number }>()
+export const getMilkSummary = async (
+  animalId: string,
+  query: Record<string, string> = {},
+) => {
+  const from = query.from ? new Date(query.from) : new Date(Date.now() - 30 * 86_400_000);
+  const to   = query.to   ? new Date(query.to)   : new Date();
 
-  records.forEach((r: any) => {
-    const key = new Date(r.date).toISOString().split('T')[0]
-    const existing = map.get(key) || { date: key, morning: 0, evening: 0, total: 0 }
-
-    if (r.session === 'MORNING') {
-      existing.morning += r.quantity || 0
-    } else if (r.session === 'EVENING') {
-      existing.evening += r.quantity || 0
-    } else {
-      // Legacy shape
-      existing.morning += r.morning || 0
-      existing.evening += r.evening || 0
-    }
-    existing.total = existing.morning + existing.evening
-    map.set(key, existing)
-  })
-
-  return Array.from(map.values())
-}
-
-export const createMilkRecord = async (animalId: string, body: Record<string, unknown>) => {
-  const morning = body.session === 'MORNING' ? Number(body.quantity) : 0
-  const evening = body.session === 'EVENING' ? Number(body.quantity) : 0
-
-  return MilkRecord.create({
+  const records = await MilkRecord.find({
     animalId,
-    date:     body.date || new Date(),
-    morning,
-    evening,
-    total:    morning + evening,
-    session:  body.session,
-    quantity: body.quantity,
-    fat:      body.fat,
-    snf:      body.snf,
-    notes:    body.notes,
-  })
-}
+    date: { $gte: from, $lte: to },
+  });
 
-export const deleteMilkRecord = async (_animalId: string, recordId: string) => {
-  return MilkRecord.findByIdAndDelete(recordId)
-}
+  const totalLitres  = records.reduce((s, r) => s + (r.quantity ?? r.total ?? 0), 0);
+  const totalRevenue = totalLitres * env.MILK_PRICE_PER_LITRE;
+  return { totalLitres, totalRevenue, recordCount: records.length, from, to };
+};
+
+export const createMilkRecord = async (animalId: string, data: unknown) => {
+  return MilkRecord.create({ ...(data as object), animalId });
+};
+
+export const deleteMilkRecord = async (animalId: string, recordId: string) => {
+  return MilkRecord.findOneAndDelete({ _id: recordId, animalId });
+};
 
 // ── Lactations ────────────────────────────────────────────────────────────────
-export const getLactations = async (animalId: string) => {
-  const animal = await Animal.findById(animalId).select('lactations')
-  return (animal as any)?.lactations ?? []
-}
 
-export const createLactation = async (animalId: string, body: Record<string, unknown>) => {
+export const getLactations = async (animalId: string) => {
+  const animal = await Animal.findById(animalId).select('lactations');
+  if (!animal) throw createError('Animal not found', 404, 'NOT_FOUND');
+  return animal.lactations ?? [];
+};
+
+export const createLactation = async (animalId: string, data: unknown) => {
   const animal = await Animal.findByIdAndUpdate(
     animalId,
-    { $push: { lactations: { ...body, status: 'ACTIVE', _id: new mongoose.Types.ObjectId() } } },
-    { new: true }
-  )
-  return (animal as any)?.lactations?.slice(-1)[0]
-}
+    { $push: { lactations: data } },
+    { new: true, runValidators: true },
+  );
+  if (!animal) throw createError('Animal not found', 404, 'NOT_FOUND');
+  return animal.lactations?.at(-1);
+};
 
-export const updateLactation = async (animalId: string, lacId: string, body: Record<string, unknown>) => {
+export const updateLactation = async (
+  animalId: string,
+  lacId: string,
+  data: unknown,
+) => {
+  const update: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(data as object)) {
+    update[`lactations.$.${k}`] = v;
+  }
   const animal = await Animal.findOneAndUpdate(
     { _id: animalId, 'lactations._id': lacId },
-    { $set: { 'lactations.$': { ...body, _id: lacId } } },
-    { new: true }
-  )
-  return (animal as any)?.lactations?.find((l: any) => String(l._id) === lacId)
-}
+    { $set: update },
+    { new: true },
+  );
+  if (!animal) throw createError('Lactation record not found', 404, 'NOT_FOUND');
+  return animal.lactations?.find((l) => String(l._id) === lacId);
+};
 
 // ── Reproduction ──────────────────────────────────────────────────────────────
+
 export const getReproduction = async (animalId: string) => {
-  const records = await ReproductionRecord.find({ animalId }).sort({ date: -1 })
+  return ReproductionRecord.find({ animalId }).sort({ date: -1 });
+};
 
-  const aiRecords      = records.filter((r: any) => r.type === 'AI')
-  const calvingRecords = records.filter((r: any) => r.type === 'Calving')
-  const lastCalving    = calvingRecords[0]
+export const createAIRecord = async (animalId: string, data: unknown) => {
+  return ReproductionRecord.create({ ...(data as object), animalId, type: 'AI' });
+};
 
-  return {
-    currentPregnancyStatus: 'OPEN',
-    totalCalvings:          calvingRecords.length,
-    totalAIAttempts:        aiRecords.length,
-    lastCalvingDate:        lastCalving ? (lastCalving as any).date : null,
-    expectedDueDate:        null,
-    aiRecords:              aiRecords.map(normaliseReproRecord),
-    calvingRecords:         calvingRecords.map(normaliseReproRecord),
-  }
-}
+export const updateAIRecord = async (
+  animalId: string,
+  aiId: string,
+  data: unknown,
+) => {
+  const record = await ReproductionRecord.findOneAndUpdate(
+    { _id: aiId, animalId, type: 'AI' },
+    data as object,
+    { new: true, runValidators: true },
+  );
+  if (!record) throw createError('AI record not found', 404, 'NOT_FOUND');
+  return record;
+};
 
-const normaliseReproRecord = (r: any) => ({
-  _id:                r._id,
-  date:               r.date,
-  semenBullName:      r.semenBullName || r.notes,
-  semenCode:          r.semenCode,
-  technicianName:     r.technicianName,
-  status:             r.status || 'DONE',
-  pregnancyCheckDate: r.pregnancyCheckDate,
-  calfGender:         r.calfGender,
-  calfTagNo:          r.calfTagNo,
-  calfWeight:         r.calfWeight,
-  complications:      r.complications,
-  notes:              r.notes,
-})
-
-export const createAIRecord = async (animalId: string, body: Record<string, unknown>) => {
-  return ReproductionRecord.create({ animalId, type: 'AI', ...body })
-}
-
-export const updateAIRecord = async (_animalId: string, aiId: string, body: Record<string, unknown>) => {
-  return ReproductionRecord.findByIdAndUpdate(aiId, body, { new: true })
-}
-
-export const createCalving = async (animalId: string, body: Record<string, unknown>) => {
-  return ReproductionRecord.create({ animalId, type: 'Calving', ...body })
-}
+export const createCalving = async (animalId: string, data: unknown) => {
+  return ReproductionRecord.create({ ...(data as object), animalId, type: 'Calving' });
+};
 
 // ── Health ────────────────────────────────────────────────────────────────────
+
 export const getHealth = async (animalId: string) => {
-  const records = await HealthRecord.find({ animalId }).sort({ date: -1 })
+  return HealthRecord.find({ animalId }).sort({ date: -1 });
+};
 
-  const vaccinations = records
-    .filter((r: any) => r.recordType === 'VACCINATION')
-    .map((r: any) => ({
-      _id:              r._id,
-      vaccineName:      r.condition,
-      date:             r.date,
-      nextDueDate:      r.nextDueDate,
-      dosage:           r.dosage,
-      veterinarianName: r.veterinarianName,
-      cost:             r.cost,
-      status:           r.vaccineStatus || 'GIVEN',
-      notes:            r.notes,
-    }))
-
-  const treatments = records
-    .filter((r: any) => r.recordType !== 'VACCINATION')
-    .map((r: any) => ({
-      _id:              r._id,
-      date:             r.date,
-      diagnosis:        r.condition,
-      medicines:        r.medicines || [],
-      veterinarianName: r.veterinarianName,
-      cost:             r.cost,
-      followUpDate:     r.followUpDate,
-      notes:            r.notes,
-    }))
-
-  const totalVaccinationCost = vaccinations.reduce((s: number, v: any) => s + (v.cost || 0), 0)
-  const totalTreatmentCost   = treatments.reduce((s: number, t: any) => s + (t.cost || 0), 0)
-
-  return { vaccinations, treatments, totalVaccinationCost, totalTreatmentCost }
-}
-
-export const createVaccination = async (animalId: string, body: Record<string, unknown>) => {
+export const createVaccination = async (animalId: string, data: unknown) => {
   return HealthRecord.create({
+    ...(data as object),
     animalId,
-    recordType:       'VACCINATION',
-    condition:        body.vaccineName,
-    date:             body.date,
-    nextDueDate:      body.nextDueDate,
-    dosage:           body.dosage,
-    veterinarianName: body.veterinarianName,
-    cost:             body.cost,
-    vaccineStatus:    body.status,
-    notes:            body.notes,
-  })
-}
+    recordType: 'VACCINATION',
+  });
+};
 
-export const updateVaccination = async (_animalId: string, vId: string, body: Record<string, unknown>) => {
-  return HealthRecord.findByIdAndUpdate(vId, body, { new: true })
-}
+export const updateVaccination = async (
+  animalId: string,
+  vId: string,
+  data: unknown,
+) => {
+  const record = await HealthRecord.findOneAndUpdate(
+    { _id: vId, animalId, recordType: 'VACCINATION' },
+    data as object,
+    { new: true, runValidators: true },
+  );
+  if (!record) throw createError('Vaccination record not found', 404, 'NOT_FOUND');
+  return record;
+};
 
-export const createTreatment = async (animalId: string, body: Record<string, unknown>) => {
+export const createTreatment = async (animalId: string, data: unknown) => {
   return HealthRecord.create({
+    ...(data as object),
     animalId,
-    recordType:       'TREATMENT',
-    condition:        body.diagnosis,
-    date:             body.date,
-    medicines:        body.medicines,
-    veterinarianName: body.veterinarianName,
-    cost:             body.cost,
-    followUpDate:     body.followUpDate,
-    notes:            body.notes,
-  })
-}
+    recordType: 'TREATMENT',
+  });
+};
 
-export const updateTreatment = async (_animalId: string, tId: string, body: Record<string, unknown>) => {
-  return HealthRecord.findByIdAndUpdate(tId, body, { new: true })
-}
+export const updateTreatment = async (
+  animalId: string,
+  tId: string,
+  data: unknown,
+) => {
+  const record = await HealthRecord.findOneAndUpdate(
+    { _id: tId, animalId, recordType: 'TREATMENT' },
+    data as object,
+    { new: true, runValidators: true },
+  );
+  if (!record) throw createError('Treatment record not found', 404, 'NOT_FOUND');
+  return record;
+};
 
 // ── Feeding ───────────────────────────────────────────────────────────────────
+
 export const getFeeding = async (animalId: string) => {
-  const records = await FeedRecord.find({ animalId }).sort({ date: -1 })
+  const [records, animal] = await Promise.all([
+    FeedRecord.find({ animalId }).sort({ date: -1 }).limit(90),
+    Animal.findById(animalId).select('feedingPlan'),
+  ]);
+  return { records, plan: animal?.feedingPlan ?? [] };
+};
 
-  const now        = new Date()
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const yearStart  = new Date(now.getFullYear(), 0, 1)
+export const createFeedRecord = async (animalId: string, data: unknown) => {
+  return FeedRecord.create({ ...(data as object), animalId });
+};
 
-  const monthlyFeedCost = records
-    .filter((r: any) => new Date(r.date) >= monthStart)
-    .reduce((s: number, r: any) => s + (r.quantity * (r.costPerKg || 0)), 0)
-
-  const yearlyFeedCost = records
-    .filter((r: any) => new Date(r.date) >= yearStart)
-    .reduce((s: number, r: any) => s + (r.quantity * (r.costPerKg || 0)), 0)
-
-  const animal      = await Animal.findById(animalId).select('feedingPlan')
-  const currentPlan = (animal as any)?.feedingPlan ?? []
-
-  // ── Daily breakdown from feeding plan ───────────────────────────
-  const breakdownMap = new Map<string, { totalQuantity: number; unit: string; dailyCost: number }>()
-
-  for (const item of currentPlan) {
-    const key      = item.fodderType || 'GREEN'
-    const existing = breakdownMap.get(key) || { totalQuantity: 0, unit: item.unit || 'kg', dailyCost: 0 }
-    existing.totalQuantity += item.dailyQuantity || 0
-    existing.dailyCost     += (item.dailyQuantity || 0) * (item.costPerUnit || 0)
-    breakdownMap.set(key, existing)
-  }
-
-  const dailyBreakdown = Array.from(breakdownMap.entries()).map(([fodderType, v]) => ({
-    fodderType,
-    totalQuantity: Number(v.totalQuantity.toFixed(2)),
-    unit:          v.unit,
-    dailyCost:     Number(v.dailyCost.toFixed(2)),
-  }))
-
-  const dailyFeedCost = dailyBreakdown.reduce((s, d) => s + d.dailyCost, 0)
-
-  return {
-    monthlyFeedCost,
-    yearlyFeedCost,
-    dailyFeedCost:  Number(dailyFeedCost.toFixed(2)),
-    dailyBreakdown,
-    currentPlan,
-    records,
-  }
-}
-
-export const createFeedRecord = async (animalId: string, body: Record<string, unknown>) => {
-  return FeedRecord.create({ animalId, ...body })
-}
-
-export const upsertFeedingPlan = async (animalId: string, body: Record<string, unknown>) => {
+export const upsertFeedingPlan = async (animalId: string, data: unknown) => {
   const animal = await Animal.findByIdAndUpdate(
     animalId,
-    { $push: { feedingPlan: { ...body, _id: new mongoose.Types.ObjectId() } } },
-    { new: true }
-  )
-  return (animal as any)?.feedingPlan
-}
+    { $set: { feedingPlan: data } },
+    { new: true, runValidators: true },
+  );
+  if (!animal) throw createError('Animal not found', 404, 'NOT_FOUND');
+  return animal.feedingPlan;
+};
 
 // ── Profitability ─────────────────────────────────────────────────────────────
-export const getProfitability = async (animalId: string, params: Params) => {
-  const now = new Date()
-  let start: Date
-  let end: Date = now
 
-  switch (params.period) {
-    case 'last_month':
-      start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-      end   = new Date(now.getFullYear(), now.getMonth(), 0)
-      break
-    case 'current_year':
-      start = new Date(now.getFullYear(), 0, 1)
-      break
-    default:
-      start = new Date(now.getFullYear(), now.getMonth(), 1)
-  }
+export const getProfitability = async (
+  animalId: string,
+  query: Record<string, string> = {},
+) => {
+  const from = query.from ? new Date(query.from) : new Date(Date.now() - 365 * 86_400_000);
+  const to   = query.to   ? new Date(query.to)   : new Date();
 
-  const milkRecords   = await MilkRecord.find({ animalId, date: { $gte: start, $lte: end } })
-  const feedRecords   = await FeedRecord.find({ animalId, date: { $gte: start, $lte: end } })
-  const healthRecords = await HealthRecord.find({ animalId, date: { $gte: start, $lte: end } })
+  const [milkRecords, feedRecords, healthRecords, animal] = await Promise.all([
+    MilkRecord.find({ animalId, date: { $gte: from, $lte: to } }),
+    FeedRecord.find({ animalId, date: { $gte: from, $lte: to } }),
+    HealthRecord.find({ animalId, date: { $gte: from, $lte: to } }),
+    Animal.findById(animalId).select('purchaseCost name tagNo type breed'),
+  ]);
 
-  const MILK_PRICE  = 40
-  // FIX: totalLitres supports both storage shapes
-  const totalLitres = milkRecords.reduce((s: number, r: any) => {
-    return s + (r.quantity ?? ((r.morning || 0) + (r.evening || 0)))
-  }, 0)
-  const milkIncome  = totalLitres * MILK_PRICE
-  const feedCost    = feedRecords.reduce((s: number, r: any) => s + ((r.quantity || 0) * (r.costPerKg || 0)), 0)
-  const medicalCost = healthRecords.reduce((s: number, r: any) => s + (r.cost || 0), 0)
-  const netProfit   = milkIncome - feedCost - medicalCost
-  const roi         = (feedCost + medicalCost) > 0 ? (netProfit / (feedCost + medicalCost)) * 100 : 0
+  const totalMilk     = milkRecords.reduce((s, r) => s + (r.quantity ?? r.total ?? 0), 0);
+  const milkRevenue   = totalMilk * env.MILK_PRICE_PER_LITRE;
+  const feedCost      = feedRecords.reduce((s, r) => s + (r.quantity * (r.costPerKg ?? 0)), 0);
+  const healthCost    = healthRecords.reduce((s, r) => s + (r.cost ?? 0), 0);
+  const totalCost     = feedCost + healthCost;
+  const netProfit     = milkRevenue - totalCost;
 
-  return { milkIncome, feedCost, medicalCost, otherCost: 0, netProfit, roi, totalLitres }
-}
+  return {
+    animal,
+    period: { from, to },
+    revenue:  { milk: milkRevenue, total: milkRevenue },
+    costs:    { feed: feedCost, health: healthCost, total: totalCost },
+    milk:     { litres: totalMilk, records: milkRecords.length },
+    netProfit,
+    roi: totalCost > 0 ? ((netProfit / totalCost) * 100).toFixed(2) + '%' : 'N/A',
+  };
+};
 
-// ── Fodder Crops ──────────────────────────────────────────────────────────────
-export const getFodderCrops   = async () => FodderStock.find({ isCrop: true })
-export const createFodderCrop = async (body: Record<string, unknown>) => FodderStock.create({ ...body, isCrop: true })
-export const updateFodderCrop = async (id: string, body: Record<string, unknown>) =>
-  FodderStock.findByIdAndUpdate(id, body, { new: true })
+// ── Fodder ────────────────────────────────────────────────────────────────────
 
-// ── Fodder Stock ──────────────────────────────────────────────────────────────
-export const getFodderStock   = async () => FodderStock.find({ isCrop: { $ne: true } })
-export const createFodderStock = async (body: Record<string, unknown>) => FodderStock.create(body)
-export const updateFodderStock = async (id: string, body: Record<string, unknown>) =>
-  FodderStock.findByIdAndUpdate(id, body, { new: true })
+export const getFodderCrops = async () => {
+  return FodderStock.find({ isCrop: true }).sort({ plantingDate: -1 });
+};
+
+export const createFodderCrop = async (data: unknown) => {
+  return FodderStock.create({ ...(data as object), isCrop: true });
+};
+
+export const updateFodderCrop = async (id: string, data: unknown) => {
+  return FodderStock.findByIdAndUpdate(id, data as object, {
+    new: true,
+    runValidators: true,
+  });
+};
+
+export const getFodderStock = async () => {
+  return FodderStock.find({ isCrop: false }).sort({ createdAt: -1 });
+};
+
+export const createFodderStock = async (data: unknown) => {
+  return FodderStock.create({ ...(data as object), isCrop: false });
+};
+
+export const updateFodderStock = async (id: string, data: unknown) => {
+  return FodderStock.findByIdAndUpdate(id, data as object, {
+    new: true,
+    runValidators: true,
+  });
+};

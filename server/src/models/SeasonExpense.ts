@@ -1,39 +1,35 @@
-// Path: ranch-tracker/server/src/models/SeasonExpense.ts
-
 import mongoose from 'mongoose';
 
-const seasonExpenseSchema = new mongoose.Schema(
-  {
-    seasonId: { type: String, required: true, index: true },
-
-    date:        { type: Date,   required: true },
-    category: {
-      type: String,
-      required: true,
-      enum: [
-        'LAND_PREP', 'SEEDS', 'FERTILIZER', 'IRRIGATION',
-        'LABOR', 'PEST_CONTROL', 'HARVESTING', 'TRANSPORT', 'OTHER',
-        'Machinery', 'Seed', 'Fertilizer', 'Irrigation', 'Labour',
-        'Pest Control', 'Other',
-      ],
-      default: 'OTHER',
+const seasonExpenseSchema = new mongoose.Schema({
+  seasonId: {
+    type: String,
+    required: true,
+    index: true,
+    validate: {
+      validator: (v: string) => /^[a-f\d]{24}$/i.test(v),
+      message: 'seasonId must be a valid 24-char ObjectId string',
     },
-    description: { type: String, required: true },
-    amount:      { type: Number, required: true },
-
-    // Optional fields
-    quantity: { type: Number },
-    unit:     { type: String },
-    vendor:   { type: String },
   },
-  {
-    timestamps: true,
-    toJSON:    { virtuals: true },
-    toObject:  { virtuals: true },
-  }
-);
+  date:        { type: Date, required: true, default: Date.now },
+  category:    {
+    type: String,
+    enum: ['SEEDS', 'FERTILIZER', 'PESTICIDE', 'LABOUR', 'MACHINERY', 'IRRIGATION', 'OTHER'],
+    required: true,
+  },
+  description: { type: String, trim: true },
+  amount:      { type: Number, required: true, min: 0 },
+  vendor:      { type: String, trim: true },
+  notes:       { type: String },
+}, {
+  timestamps: true,
+  toJSON:  { virtuals: true },
+  toObject:{ virtuals: true },
+});
+
 seasonExpenseSchema.virtual('expenseId').get(function () {
   return this._id.toString();
 });
+
+seasonExpenseSchema.index({ seasonId: 1, date: -1 });
 
 export default mongoose.model('SeasonExpense', seasonExpenseSchema);
