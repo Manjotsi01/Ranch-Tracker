@@ -13,6 +13,4 @@ const userSchema = new mongoose.Schema({
   lastLogin: { type: Date },
 }, { timestamps: true });
 
-userSchema.index({ email: 1 });
-
 export default mongoose.model('User', userSchema);
