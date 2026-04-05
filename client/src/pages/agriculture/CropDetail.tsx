@@ -41,23 +41,28 @@ export default function CropDetail() {
 
   const staticCrop = allStaticCrops.find((c) => c.id === cropId);
 
-  const loadData = useCallback(async () => {
+const loadData = useCallback(async () => {
   if (!cropId) return;
 
   setLoadingCrop(true);
   setError(null);
 
   try {
-    const [cropRes, seasonsData] = await Promise.all([
-      api.get<{ data: Crop }>(`/agriculture/crops/${cropId}`),
-      fetchSeasonsByCrop(cropId)
-    ]);
-
-    setCrop(cropRes.data.data);
+    // Fetch seasons regardless — they may exist even if no aggregate crop doc
+    const seasonsData = await fetchSeasonsByCrop(cropId);
     setSeasons(seasonsData || []);
 
+    // Try to get aggregated crop stats — 404 is fine, it just means no seasons yet
+    try {
+      const cropRes = await api.get<{ data: Crop }>(`/agriculture/crops/${cropId}`);
+      setCrop(cropRes.data.data);
+    } catch {
+      // No seasons exist yet — use static crop data, not an error
+      setCrop(null);
+    }
+
   } catch (e: unknown) {
-    setError(e instanceof Error ? e.message : 'Failed to load crop data');
+    setError(e instanceof Error ? e.message : 'Failed to load seasons');
   } finally {
     setLoadingCrop(false);
   }
