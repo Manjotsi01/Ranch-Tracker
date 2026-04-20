@@ -20,7 +20,7 @@ const ProductsTab: React.FC = () => {
   const [form,     setForm]       = useState(EMPTY)
   const [errors,   setErrors]     = useState<Record<string, string>>({})
 
-  useEffect(() => { fetchProducts(true) }, [fetchProducts])
+  useEffect(() => { fetchProducts() }, [fetchProducts])
 
   const openCreate = () => { setEditing(null); setForm(EMPTY); setShowForm(true) }
   const openEdit   = (p: Product) => {

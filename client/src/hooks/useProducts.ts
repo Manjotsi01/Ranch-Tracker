@@ -7,9 +7,9 @@ export function useProducts() {
   const [loading,  setLoading]  = useState(false)
   const [error,    setError]    = useState<string | null>(null)
 
-  const fetchProducts = useCallback(async (all?: boolean) => {
+  const fetchProducts = useCallback(async () => {
     setLoading(true); setError(null)
-    try   { setProducts(await shopApi.getProducts(all)) }
+    try   { setProducts(await shopApi.getProducts()) }
     catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load products') }
     finally { setLoading(false) }
   }, [])
@@ -27,7 +27,7 @@ export function useProducts() {
   }, [])
 
   const setStock = useCallback(async (id: string, qty: number) => {
-    const p = await shopApi.setStock(id, qty)
+    const p = await shopApi.updateProduct(id, { stock: qty })
     setProducts(prev => prev.map(x => x._id === id ? p : x))
     return p
   }, [])
