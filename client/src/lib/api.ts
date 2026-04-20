@@ -218,37 +218,57 @@ export const dairyApi = {
 };
 
 // ─── SHOP API ─────────────────────────────────────────────
-
 export const shopApi = {
-  // Milk
-  getMilkEntries:  (p?: Record<string, string>)   => (api.get('/shop/milk', { params: p })),
-  getMilkStock:    (date?: string)                 => (api.get('/shop/milk/stock', { params: date ? { date } : {} })),
-  addMilkEntry:    (data: unknown)                 => (api.post('/shop/milk', data)),
+  // MILK
+  getMilkEntries: async (params?: any) =>
+    (await api.get('/milk', { params })).data.data,
 
-  // Products
-  getProducts:     (all?: boolean)                 => (api.get('/shop/products', { params: all ? { all: true } : {} })),
-  createProduct:   (data: unknown)                 => (api.post('/shop/products', data)),
-  updateProduct:   (id: string, data: unknown)     => (api.patch(`/shop/products/${id}`, data)),
-  adjustStock:     (id: string, delta: number)     => (api.patch(`/shop/products/${id}/stock/adjust`, { delta })),
-  setStock:        (id: string, qty: number)       => (api.patch(`/shop/products/${id}/stock/set`, { qty })),
-  deleteProduct:   (id: string)                    => (api.delete(`/shop/products/${id}`)),
+  getMilkStock: async (date?: string) =>
+    (await api.get('/milk/stock', { params: { date } })).data.data,
 
-  // Sales
-  getSales:        (p?: Record<string, string | number>) => (api.get('/shop/sales', { params: p })),
-  createSale:      (data: unknown)                 => (api.post('/shop/sales', data)),
+  addMilkEntry: async (data: any) =>
+    (await api.post('/milk', data)).data.data,
 
-  // Wholesale
-  getWholesale:    (p?: Record<string, string>)    => (api.get('/shop/wholesale', { params: p })),
-  createWholesale: (data: unknown)                 => (api.post('/shop/wholesale', data)),
-  markReceived:    (id: string)                    => (api.patch(`/shop/wholesale/${id}/payment`)),
+  // PRODUCTS
+  getProducts: async () =>
+    (await api.get('/products')).data.data,
 
-  // Expenses
-  getExpenses:     (p?: Record<string, string>)    => (api.get('/shop/expenses', { params: p })),
-  upsertExpense:   (data: unknown)                 => (api.post('/shop/expenses', data)),
+  createProduct: async (data: any) =>
+    (await api.post('/products', data)).data.data,
 
-  // Reports
-  getDailyReport:   (date?: string)  => (api.get('/shop/reports/daily', { params: date ? { date } : {} })),
-  getMonthlyReport: (month: string)  => (api.get('/shop/reports/monthly', { params: { month } })),
-}
+  updateProduct: async (id: string, data: any) =>
+    (await api.patch(`/products/${id}`, data)).data.data,
+
+  deleteProduct: async (id: string) =>
+    (await api.delete(`/products/${id}`)).data.data,
+
+  // SALES
+  getSales: async (params?: any) =>
+    (await api.get('/sales', { params })).data.data,
+
+  createSale: async (data: any) =>
+    (await api.post('/sales', data)).data.data,
+
+  // WHOLESALE
+  getWholesaleSales: async (params?: any) =>
+    (await api.get('/wholesale', { params })).data.data,
+
+  createWholesaleSale: async (data: any) =>
+    (await api.post('/wholesale', data)).data.data,
+
+  // EXPENSES
+  getExpenses: async (params?: any) =>
+    (await api.get('/expenses', { params })).data.data,
+
+  upsertExpense: async (data: any) =>
+    (await api.post('/expenses', data)).data.data,
+
+  // REPORTS
+  getDailyReport: async (date?: string) =>
+    (await api.get('/reports/daily', { params: { date } })).data.data,
+
+  getMonthlyReport: async (month: string) =>
+    (await api.get('/reports/monthly', { params: { month } })).data.data,
+} 
 
 export default api;
