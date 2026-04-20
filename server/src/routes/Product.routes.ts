@@ -10,13 +10,14 @@ import { sendSuccess } from '../utils/response'
 
 const router = Router()
 
-// GET /api/products            → active products (POS list)
-// GET /api/products?all=true   → include inactive (admin)
-router.get('/', asyncHandler(async (req: Request, res: Response) => {
-  const activeOnly = req.query.all !== 'true'
-  const data = await productService.getProducts(activeOnly)
-  sendSuccess(res, data)
-}))
+router.get('/', async (req, res) => {
+  try {
+    const products = await productService.getProducts()
+    res.json({ success: true, data: products })
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to fetch products' })
+  }
+})
 
 // GET /api/products/:id
 router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
