@@ -218,83 +218,37 @@ export const dairyApi = {
 };
 
 // ─── SHOP API ─────────────────────────────────────────────
+
 export const shopApi = {
-
   // Milk
-  addMilkEntry: (data: unknown) =>
-    api.post('/shop/milk', data),
-
-  getMilkEntries: (params?: Record<string, string>) =>
-    api.get('/shop/milk', { params }),
-
-  getMilkStock: (date?: string) =>
-    api.get('/shop/milk/stock', {
-      params: date ? { date } : {},
-    }),
-
-  // Expenses
-  upsertExpense: (data: unknown) =>
-    api.post('/shop/expenses', data),
-
-  getExpenses: (params?: Record<string, string>) =>
-    api.get('/shop/expenses', { params }),
-
-  getMakingPrice: (date?: string) =>
-    api.get('/shop/expenses/making-price', {
-      params: date ? { date } : {},
-    }),
+  getMilkEntries:  (p?: Record<string, string>)   => (api.get('/shop/milk', { params: p })),
+  getMilkStock:    (date?: string)                 => (api.get('/shop/milk/stock', { params: date ? { date } : {} })),
+  addMilkEntry:    (data: unknown)                 => (api.post('/shop/milk', data)),
 
   // Products
-  getProducts: (all?: boolean) =>
-    api.get('/shop/products', {
-      params: all ? { all: true } : {},
-    }),
-
-  createProduct: (data: unknown) =>
-    api.post('/shop/products', data),
-
-  updateProduct: (id: string, data: unknown) =>
-    api.patch(`/shop/products/${id}`, data),
-
-  adjustStock: (id: string, delta: number) =>
-    api.patch(`/shop/products/${id}/stock/adjust`, { delta }),
-
-  setStock: (id: string, qty: number) =>
-    api.patch(`/shop/products/${id}/stock/set`, { qty }),
-
-  deleteProduct: (id: string) =>
-    api.delete(`/shop/products/${id}`),
+  getProducts:     (all?: boolean)                 => (api.get('/shop/products', { params: all ? { all: true } : {} })),
+  createProduct:   (data: unknown)                 => (api.post('/shop/products', data)),
+  updateProduct:   (id: string, data: unknown)     => (api.patch(`/shop/products/${id}`, data)),
+  adjustStock:     (id: string, delta: number)     => (api.patch(`/shop/products/${id}/stock/adjust`, { delta })),
+  setStock:        (id: string, qty: number)       => (api.patch(`/shop/products/${id}/stock/set`, { qty })),
+  deleteProduct:   (id: string)                    => (api.delete(`/shop/products/${id}`)),
 
   // Sales
-  createSale: (data: unknown) =>
-    api.post('/shop/sales', data),
-
-  getSales: (params?: Record<string, string | number>) =>
-    api.get('/shop/sales', { params }),
-
-  getSaleById: (id: string) =>
-    api.get(`/shop/sales/${id}`),
+  getSales:        (p?: Record<string, string | number>) => (api.get('/shop/sales', { params: p })),
+  createSale:      (data: unknown)                 => (api.post('/shop/sales', data)),
 
   // Wholesale
-  createWholesale: (data: unknown) =>
-    api.post('/shop/wholesale', data),
+  getWholesale:    (p?: Record<string, string>)    => (api.get('/shop/wholesale', { params: p })),
+  createWholesale: (data: unknown)                 => (api.post('/shop/wholesale', data)),
+  markReceived:    (id: string)                    => (api.patch(`/shop/wholesale/${id}/payment`)),
 
-  getWholesale: (params?: Record<string, string>) =>
-    api.get('/shop/wholesale', { params }),
-
-  markPaymentReceived: (id: string) =>
-    api.patch(`/shop/wholesale/${id}/payment`),
+  // Expenses
+  getExpenses:     (p?: Record<string, string>)    => (api.get('/shop/expenses', { params: p })),
+  upsertExpense:   (data: unknown)                 => (api.post('/shop/expenses', data)),
 
   // Reports
-  getDailyReport: (date?: string) =>
-    api.get('/shop/reports/daily', {
-      params: date ? { date } : {},
-    }),
-
-  getMonthlyReport: (month?: string) =>
-    api.get('/shop/reports/monthly', {
-      params: month ? { month } : {},
-    }),
-};
+  getDailyReport:   (date?: string)  => (api.get('/shop/reports/daily', { params: date ? { date } : {} })),
+  getMonthlyReport: (month: string)  => (api.get('/shop/reports/monthly', { params: { month } })),
+}
 
 export default api;

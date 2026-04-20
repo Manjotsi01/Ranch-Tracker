@@ -422,20 +422,22 @@ export interface HerdSummary {
 }
 
 // ─── Shop / POS ───────────────────────────────────────────────────────────────
-// ── Primitives ────────────────────────────────────────────────────────────────
 export type Shift       = 'MORNING' | 'EVENING'
 export type MilkSource  = 'OWN' | 'PURCHASED'
 export type PaymentMode = 'CASH' | 'UPI'
-export type WholesalePaymentStatus = 'PENDING' | 'RECEIVED'
+export type PaymentStatus = 'PENDING' | 'RECEIVED'
 
-// ── Milk ──────────────────────────────────────────────────────────────────────
+export type ProductCategory =
+  | 'MILK' | 'CURD' | 'PANEER' | 'GHEE' | 'BUTTER'
+  | 'LASSI' | 'KHOYA' | 'CREAM' | 'OTHER'
+
 export interface MilkEntry {
   _id: string
   date: string
   shift: Shift
   quantityLiters: number
-  fat: number
-  snf: number
+  fat?: number
+  snf?: number
   source: MilkSource
   notes?: string
   createdAt: string
@@ -448,45 +450,37 @@ export interface MilkStock {
   available: number
 }
 
-// ── Expense ───────────────────────────────────────────────────────────────────
-export interface Expense {
-  _id: string
-  date: string
-  feed: number
-  labor: number
-  transport: number
-  medical: number
-  misc: number
-  createdAt: string
-}
-
-export interface MakingPrice {
-  date: string
-  expenseTotal: number
-  milkTotal: number
-  makingPrice: number
-}
-
-// ── Product ───────────────────────────────────────────────────────────────────
 export interface Product {
   _id: string
   name: string
+  category: ProductCategory
   unit: string
   mrp: number
   costPrice: number
   stockQty: number
   isActive: boolean
   quickButtons: number[]
+  lowStockThreshold: number
+  suggestions: { _id: string; name: string }[]
   createdAt: string
 }
 
-// ── Sale (Retail) ─────────────────────────────────────────────────────────────
 export interface SaleItem {
   productId: string
   productName: string
   unit: string
   quantity: number
   unitPrice: number
+  lineTotal: number
+}
+
+export interface CartItem {
+  id: string
+  productId: string
+  productName: string
+  unit: string
+  unitPrice: number
+  quantity: number
   lineTotal: number
 }
 
@@ -497,7 +491,6 @@ export interface Sale {
   paymentMode: PaymentMode
   totalAmount: number
   customerName?: string
-  createdAt: string
 }
 
 export interface CreateSalePayload {
@@ -506,33 +499,37 @@ export interface CreateSalePayload {
   customerName?: string
 }
 
-// ── Wholesale ─────────────────────────────────────────────────────────────────
 export interface WholesaleSale {
   _id: string
   date: string
   buyerName: string
   quantityLiters: number
-  fat: number
-  snf: number
   ratePerLiter: number
+  fat?: number
+  snf?: number
   totalAmount: number
-  paymentStatus: WholesalePaymentStatus
+  paymentStatus: PaymentStatus
   paymentDate?: string
   notes?: string
-  createdAt: string
 }
 
-// ── Reports ───────────────────────────────────────────────────────────────────
+export interface Expense {
+  _id: string
+  date: string
+  feed: number
+  labor: number
+  transport: number
+  medical: number
+  misc: number
+  total: number
+}
+
 export interface DailyReport {
   date: string
   milk: { collected: number; entries: number; wholesaled: number; available: number }
   expenses: Expense & { total: number }
   makingPrice: number
-  retail: {
-    revenue: number
-    transactions: number
-    byMode: Record<string, { total: number; count: number }>
-  }
+  retail: { revenue: number; transactions: number; byMode: Record<string, { total: number; count: number }> }
   wholesale: { revenue: number; liters: number }
   totalRevenue: number
   pendingPayments: { total: number; count: number }
@@ -546,15 +543,4 @@ export interface MonthlyReport {
   retail: { revenue: number; transactions: number }
   wholesale: { revenue: number; liters: number }
   totalRevenue: number
-}
-
-// ── Cart (POS local state) ────────────────────────────────────────────────────
-export interface CartItem {
-  id: string
-  productId: string
-  productName: string
-  unit: string
-  unitPrice: number
-  quantity: number
-  lineTotal: number
 }

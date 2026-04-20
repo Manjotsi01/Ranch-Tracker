@@ -16,7 +16,7 @@ const FodderModule = lazy(() => import('./pages/dairy/FodderModule'));
 // Shop (lazy as well to avoid chunk issues)
 const ShopOverview = lazy(() => import('./pages/shop/dashboard'));
 const POS          = lazy(() => import('./pages/shop/pos'));
-const Processing   = lazy(() => import('./pages/shop/inventory'));
+const Processing   = lazy(() => import('./pages/shop/inventory/ProductsTab'));
 const SalesHistory = lazy(() => import('./pages/shop/reports'));
 
 const PageLoader: React.FC = () => (
@@ -65,6 +65,6 @@ export default function App() {
 
         </Route>
       </Routes>
-    </BrowserRouter>
+    </BrowserRouter>   
   );
 }
