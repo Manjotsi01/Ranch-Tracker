@@ -1,466 +1,742 @@
-// Path: ranch-tracker/client/src/pages/dashboard/index.tsx
-
+// src/pages/dashboard/index.tsx
 import { useOutletContext } from 'react-router-dom';
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts';
 import {
-  TrendingUp, TrendingDown, Milk,
-  Activity, AlertTriangle, IndianRupee, Sprout,
-  Scale, Wallet, CalendarDays,
+  TrendingUp, TrendingDown, Milk, Activity, AlertTriangle,
+  IndianRupee, Sprout, Scale, Wallet, CalendarDays, Leaf,
+  ShoppingCart, ArrowUpRight, ArrowDownRight,
 } from 'lucide-react';
 import AlertPanel from '../../components/shared/AlertPanel';
+import StatCard from '../../components/ui/StatCard';
 import { useDashboard } from '../../hooks/useDashboard';
-import { formatCurrency, getModuleColor, formatRelativeTime } from '../../lib/utils';
+import { formatCurrency, formatRelativeTime, getModuleColor } from '../../lib/utils';
 import type { ModuleKPI, ActivityItem } from '../../types';
 
-// ─────────────────────────────────────────────
-// Small helpers
-// ─────────────────────────────────────────────
-function fc(n: number) { return formatCurrency(n, true); }
+/* ─── Helpers ─────────────────────────────────────────────── */
+const fc = (n: number) => formatCurrency(n, true);
 
-function ChartTip({ active, payload, label }: any) {
+/* ─── Chart tooltip ───────────────────────────────────────── */
+function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background: '#0d1117', border: '1px solid #1e2d40', borderRadius: 8, padding: '7px 11px', fontSize: 11 }}>
-      <p style={{ color: '#4a5a6a', marginBottom: 4 }}>{label}</p>
+    <div className="custom-tooltip">
+      <p style={{ color: '#4b5e76', fontSize: 11, marginBottom: 6, fontWeight: 600 }}>{label}</p>
       {payload.map((p: any) => (
-        <div key={p.name} style={{ display: 'flex', gap: 7, alignItems: 'center', color: '#8a9aaa', marginBottom: 2 }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: p.color, flexShrink: 0, display: 'inline-block' }} />
-          <span style={{ textTransform: 'capitalize' }}>{p.name}:</span>
-          <span style={{ color: '#c8d8e8', fontWeight: 600 }}>{fc(p.value)}</span>
+        <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, flexShrink: 0, display: 'inline-block' }} />
+          <span style={{ color: '#64748b', fontSize: 11, textTransform: 'capitalize' }}>{p.name}:</span>
+          <span style={{ color: '#f1f5f9', fontWeight: 700, fontSize: 11, marginLeft: 'auto' }}>{fc(p.value)}</span>
         </div>
       ))}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// KPI Card — matches Image 1 style exactly
-// ─────────────────────────────────────────────
-interface KPIProps {
-  label: string;
-  value: string;
-  sub?: string;
-  icon: React.ReactNode;
-  color: string;
-  loading?: boolean;
-}
-
-function KPICard({ label, value, sub, icon, color, loading }: KPIProps) {
-  if (loading) return (
-    <div className="skeleton" style={{ borderRadius: 10, height: 88 }} />
-  );
-  return (
-    <div style={{
-      background: '#0d1117',
-      border: '1px solid #1a2535',
-      borderRadius: 10,
-      padding: '12px 14px',
-      display: 'flex', flexDirection: 'column', gap: 6,
-      position: 'relative', overflow: 'hidden',
-    }}>
-      {/* subtle glow */}
-      <div style={{
-        position: 'absolute', top: -16, right: -16, width: 60, height: 60,
-        borderRadius: '50%', background: color, opacity: 0.07, filter: 'blur(16px)'
-      }} />
-
-      {/* top row */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <p style={{
-          fontSize: 9, fontWeight: 700, color: '#3a4a5a',
-          textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'Syne,sans-serif'
-        }}>
-          {label}
-        </p>
-        <div style={{
-          width: 24, height: 24, borderRadius: 7, background: `${color}1a`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0
-        }}>
-          {icon}
-        </div>
-      </div>
-
-      {/* value */}
-      <p style={{
-        fontSize: 20, fontWeight: 800, color, fontFamily: 'Syne,sans-serif',
-        lineHeight: 1, letterSpacing: '-0.5px'
-      }}>
-        {value}
-      </p>
-
-      {/* sub */}
-      {sub && <p style={{ fontSize: 10, color: '#3a4a5a' }}>{sub}</p>}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────
-// Section label
-// ─────────────────────────────────────────────
-function SLabel({ text }: { text: string }) {
+/* ─── Section heading ─────────────────────────────────────── */
+function SectionHead({ label }: { label: string }) {
   return (
     <p style={{
-      fontSize: 9, fontWeight: 700, color: '#2a3545',
-      textTransform: 'uppercase', letterSpacing: '0.12em',
-      fontFamily: 'Syne,sans-serif', marginBottom: 8
+      fontSize: 10, fontWeight: 700, letterSpacing: '.14em',
+      textTransform: 'uppercase', color: '#4b5e76',
+      fontFamily: "'Syne', sans-serif", marginBottom: 14,
     }}>
-      {text}
+      {label}
     </p>
   );
 }
 
-// ─────────────────────────────────────────────
-// Card wrapper
-// ─────────────────────────────────────────────
+/* ─── Card wrapper ────────────────────────────────────────── */
 function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
     <div style={{
-      background: '#0d1117', border: '1px solid #1a2535',
-      borderRadius: 10, padding: '14px 16px', ...style
+      background: 'linear-gradient(145deg, #1a2234 0%, #1e2a3a 100%)',
+      border: '1px solid rgba(255,255,255,0.07)',
+      borderRadius: 14,
+      padding: '18px 20px',
+      ...style,
     }}>
       {children}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// Card header
-// ─────────────────────────────────────────────
-function CardHead({ title, right }: { title: string; right?: React.ReactNode }) {
+/* ─── Card header row ─────────────────────────────────────── */
+function CardHead({
+  title, sub, right,
+}: { title: string; sub?: string; right?: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-      <p style={{ fontSize: 11, fontWeight: 700, color: '#6a7a8a', fontFamily: 'Syne,sans-serif' }}>{title}</p>
-      {right && <div style={{ fontSize: 9, color: '#2a3545' }}>{right}</div>}
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
+      <div>
+        <p style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0', fontFamily: "'Syne', sans-serif", letterSpacing: '-.1px' }}>
+          {title}
+        </p>
+        {sub && <p style={{ fontSize: 11, color: '#4b5e76', marginTop: 3 }}>{sub}</p>}
+      </div>
+      {right}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// Period toggle
-// ─────────────────────────────────────────────
-function PToggle({ period, set }: { period: string; set: (p: 'week' | 'month' | 'year') => void }) {
+/* ─── Period toggle ───────────────────────────────────────── */
+function PeriodToggle({ value, onChange }: { value: string; onChange: (v: 'week' | 'month' | 'year') => void }) {
   return (
-    <div style={{ display: 'flex', background: '#121820', borderRadius: 8, padding: 3, gap: 2 }}>
+    <div style={{
+      display: 'flex', background: '#111827',
+      borderRadius: 20, padding: 3, gap: 2,
+      border: '1px solid rgba(255,255,255,0.06)',
+    }}>
       {(['Week', 'Month', 'Year'] as const).map(p => {
         const v = p.toLowerCase() as 'week' | 'month' | 'year';
-        const on = period === v;
+        const on = value === v;
         return (
-          <button key={p} onClick={() => set(v)} style={{
-            padding: '3px 9px', border: 'none', borderRadius: 6, cursor: 'pointer',
-            fontSize: 9, fontWeight: 700, fontFamily: 'Syne,sans-serif',
-            background: on ? '#1e2d40' : 'transparent',
-            color: on ? '#c8d8e8' : '#3a4a5a',
-          }}>{p}</button>
+          <button
+            key={p}
+            onClick={() => onChange(v)}
+            style={{
+              padding: '4px 11px', border: 'none', borderRadius: 20, cursor: 'pointer',
+              fontSize: 10, fontWeight: 700, fontFamily: "'Syne', sans-serif",
+              background: on ? 'rgba(20,184,166,0.18)' : 'transparent',
+              color: on ? '#14b8a6' : '#4b5e76',
+              transition: 'all .15s',
+            }}
+          >
+            {p}
+          </button>
         );
       })}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// Empty state
-// ─────────────────────────────────────────────
-function Empty({ msg }: { msg: string }) {
+/* ─── Progress bar ────────────────────────────────────────── */
+function ProgressRow({
+  label, sub, value, max, color,
+}: { label: string; sub?: string; value: number; max?: number; color: string }) {
+  const pct = Math.min(Math.round((value / (max || Math.max(value, 1))) * 100), 100);
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 0', gap: 8 }}>
-      <Activity size={14} style={{ color: '#1e2d40' }} />
-      <span style={{ fontSize: 11, color: '#2a3545' }}>{msg}</span>
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+        <span style={{ fontSize: 12, color: '#94a3b8' }}>{label}</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color, fontFamily: "'Syne', sans-serif" }}>
+          {sub || `${pct}%`}
+        </span>
+      </div>
+      <div className="progress-track">
+        <div className="progress-fill" style={{ width: `${pct}%`, background: color }} />
+      </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// Module performance bar row
-// ─────────────────────────────────────────────
-function ModBar({ kpi }: { kpi: ModuleKPI }) {
-  const c = getModuleColor(kpi.module);
-  const pos = kpi.profit >= 0;
-  const pct = Math.min(Math.abs(kpi.profit) / Math.max(kpi.revenue, 1) * 100, 100);
+/* ─── Module KPI bar ──────────────────────────────────────── */
+function ModuleBar({ kpi }: { kpi: ModuleKPI }) {
+  const color   = getModuleColor(kpi.module);
+  const pos     = kpi.profit >= 0;
+  const revPct  = Math.min((kpi.revenue / Math.max(kpi.revenue, 1)) * 100, 100);
+
   return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 5, height: 5, borderRadius: '50%', background: c, display: 'inline-block' }} />
-          <span style={{ fontSize: 11, color: '#6a7a8a', textTransform: 'capitalize', fontFamily: 'DM Sans,sans-serif' }}>{kpi.module}</span>
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <span style={{
+            width: 8, height: 8, borderRadius: '50%',
+            background: color, display: 'inline-block', flexShrink: 0,
+            boxShadow: `0 0 6px ${color}66`,
+          }} />
+          <span style={{ fontSize: 12, color: '#94a3b8', textTransform: 'capitalize', fontFamily: "'DM Sans', sans-serif" }}>
+            {kpi.module}
+          </span>
         </div>
-        <span style={{ fontSize: 11, fontWeight: 700, color: pos ? '#4ade80' : '#f87171', fontFamily: 'Syne,sans-serif' }}>{fc(kpi.profit)}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 11, color: '#4b5e76' }}>Rev: {fc(kpi.revenue)}</span>
+          <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, color: pos ? '#34d399' : '#f87171', fontFamily: "'Syne', sans-serif" }}>
+            {pos ? '+' : ''}{fc(kpi.profit)}
+          </span>
+        </div>
       </div>
-      <div style={{ height: 3, background: '#1a2535', borderRadius: 3, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: pos ? c : '#f87171', borderRadius: 3, transition: 'width 0.5s ease' }} />
+      <div className="progress-track">
+        <div className="progress-fill" style={{ width: `${revPct}%`, background: color, opacity: 0.8 }} />
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// Activity item
-// ─────────────────────────────────────────────
-function ActRow({ item }: { item: ActivityItem }) {
-  const c = getModuleColor(item.module);
+/* ─── Activity item ───────────────────────────────────────── */
+function ActivityRow({ item }: { item: ActivityItem }) {
+  const color = getModuleColor(item.module);
+  const pos   = (item.amount ?? 0) >= 0;
+
   return (
-    <div style={{ display: 'flex', gap: 9, paddingBottom: 10, borderBottom: '1px solid #111820', alignItems: 'flex-start' }}>
+    <div style={{
+      display: 'flex', gap: 10, paddingBottom: 12,
+      borderBottom: '1px solid rgba(255,255,255,0.04)',
+      alignItems: 'flex-start', marginBottom: 2,
+    }}>
       <div style={{
-        width: 24, height: 24, borderRadius: 7, background: `${c}18`, color: c,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1
+        width: 28, height: 28, borderRadius: 8,
+        background: `${color}14`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0, marginTop: 1,
       }}>
-        <Activity size={11} />
+        <Activity size={12} style={{ color }} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 11, color: '#6a7a8a', lineHeight: 1.45 }}>{item.description}</p>
-        <p style={{ fontSize: 9, color: '#2a3545', marginTop: 2 }}>{formatRelativeTime(item.createdAt)}</p>
+        <p style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.5 }}>{item.description}</p>
+        <p style={{ fontSize: 10, color: '#4b5e76', marginTop: 3 }}>{formatRelativeTime(item.createdAt)}</p>
       </div>
       {item.amount !== undefined && (
-        <span style={{
-          fontSize: 11, fontWeight: 700, color: item.amount >= 0 ? '#4ade80' : '#f87171',
-          fontFamily: 'Syne,sans-serif', flexShrink: 0
-        }}>
-          {item.amount >= 0 ? '+' : ''}{fc(item.amount)}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+          {pos
+            ? <ArrowUpRight size={12} style={{ color: '#34d399' }} />
+            : <ArrowDownRight size={12} style={{ color: '#f87171' }} />
+          }
+          <span style={{
+            fontSize: 12, fontWeight: 700, fontFamily: "'Syne', sans-serif",
+            color: pos ? '#34d399' : '#f87171',
+          }}>
+            {fc(Math.abs(item.amount))}
+          </span>
+        </div>
       )}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// MAIN
-// ─────────────────────────────────────────────
+/* ─── Empty state ─────────────────────────────────────────── */
+function Empty({ msg }: { msg: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 0', gap: 8 }}>
+      <Activity size={15} style={{ color: '#2a3548' }} />
+      <span style={{ fontSize: 12, color: '#4b5e76' }}>{msg}</span>
+    </div>
+  );
+}
+
+/* ─── Stat mini-pill ──────────────────────────────────────── */
+function MiniStat({ label, value, color }: { label: string; value: string | number; color: string }) {
+  return (
+    <div style={{
+      background: `${color}0d`,
+      border: `1px solid ${color}20`,
+      borderRadius: 10, padding: '10px 14px',
+    }}>
+      <p style={{ fontSize: 10, color: '#4b5e76', marginBottom: 4 }}>{label}</p>
+      <p style={{ fontSize: 16, fontWeight: 800, color, fontFamily: "'Syne', sans-serif", lineHeight: 1 }}>{value}</p>
+    </div>
+  );
+}
+
+/* ─── Sparkline array for KPI cards (derived from profitChart) ── */
+function useSparklines(profitChart: any[]) {
+  if (!profitChart.length) return { revSpark: [], expSpark: [], profSpark: [] };
+  return {
+    revSpark:  profitChart.slice(-8).map(d => d.revenue  || 0),
+    expSpark:  profitChart.slice(-8).map(d => d.expenses || 0),
+    profSpark: profitChart.slice(-8).map(d => d.profit   || 0),
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MAIN DASHBOARD COMPONENT
+   ═══════════════════════════════════════════════════════════ */
 export default function Dashboard() {
   useOutletContext<{ setMobileOpen: (v: boolean) => void }>();
-  const { stats, kpis, alerts, profitChart, recentActivity, period, loading, error, setPeriod, dismissAlert, refetch } = useDashboard();
+
+  const {
+    stats, kpis, alerts, profitChart, recentActivity,
+    period, loading, error, setPeriod, dismissAlert, refetch,
+  } = useDashboard();
+
   const L = loading && !stats;
+  const { revSpark, expSpark, profSpark } = useSparklines(profitChart);
   const warnCount = alerts.filter(a => a.type === 'danger' || a.type === 'warning').length;
 
-  const pieData = kpis.filter(k => k.revenue > 0).slice(0, 5).map(k => ({
-    name: k.module, value: k.expenses, color: getModuleColor(k.module),
+  /* Pie data from KPIs */
+  const PIE_COLORS = ['#34d399', '#38bdf8', '#fbbf24', '#a78bfa', '#f87171'];
+  const pieData = kpis.filter(k => k.revenue > 0).map((k, i) => ({
+    name: k.module, value: k.revenue, color: PIE_COLORS[i % PIE_COLORS.length],
   }));
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 22, paddingBottom: 32 }}>
 
-
-
-      {/* Scrollable body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-        {/* Error */}
-        {error && (
-          <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.18)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <AlertTriangle size={13} style={{ color: '#f87171', flexShrink: 0 }} />
-            <span style={{ fontSize: 11, color: '#fca5a5', flex: 1 }}>{error}</span>
-            <button onClick={refetch} style={{ fontSize: 10, color: '#f87171', background: 'transparent', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, padding: '3px 9px', cursor: 'pointer' }}>Retry</button>
-          </div>
-        )}
-
-        {/* Farm header bar */}
+      {/* ── Error banner ─────────────────────────────── */}
+      {error && (
         <div style={{
-          padding: '30px 14px',
-          background: 'linear-gradient(90deg, #0a1a0f 0%, #0a1220 100%)',
-          borderRadius: 10, border: '1px solid #1a3020',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8,
+          padding: '12px 16px',
+          background: 'rgba(248,113,113,0.08)',
+          border: '1px solid rgba(248,113,113,0.2)',
+          borderRadius: 12,
+          display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          <div>
-            <p style={{ fontSize: 25, fontWeight: 800, color: '#d4f0e0', fontFamily: 'Syne,sans-serif' }}>🌾 Nandha Farm</p>
-            <p style={{ fontSize: 18, fontWeight: 800, color: '#d4f0e0', fontFamily: 'Syne,sans-serif' }}>ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ ਸਰਦਾਰ ਜੀ</p>
-            <p style={{ fontSize: 14, color: '#2a5040', marginTop: 1 }}>Fatehpur · Samana · Patiala</p>
-          </div>
+          <AlertTriangle size={14} style={{ color: '#f87171', flexShrink: 0 }} />
+          <span style={{ fontSize: 12, color: '#fca5a5', flex: 1 }}>{error}</span>
+          <button
+            onClick={refetch}
+            style={{
+              fontSize: 11, color: '#f87171',
+              background: 'rgba(248,113,113,0.12)',
+              border: '1px solid rgba(248,113,113,0.25)',
+              borderRadius: 7, padding: '4px 12px', cursor: 'pointer',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
-          <div style={{ display: 'flex', gap: 6 }}>
-            {[
-              { label: '● Active', color: '#4ade80' },
+      {/* ── Farm Hero ─────────────────────────────────── */}
+      <div style={{
+        padding: '24px 26px',
+        background: 'linear-gradient(110deg, #0d1f16 0%, #0c1a2e 100%)',
+        borderRadius: 16,
+        border: '1px solid rgba(20,184,166,0.12)',
+        display: 'flex', justifyContent: 'space-between',
+        alignItems: 'center', flexWrap: 'wrap', gap: 14,
+        position: 'relative', overflow: 'hidden',
+      }}>
+        {/* Decorative glow */}
+        <div style={{
+          position: 'absolute', top: -60, right: -60,
+          width: 200, height: 200, borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(20,184,166,0.1) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        }} />
 
-              { label: `${stats?.todayMilkLiters ?? 0}L today`, color: '#38bdf8' },
-              { label: `${stats?.activeCrops ?? 0} crops`, color: '#fbbf24' },
-            ].map(c => (
-              <span key={c.label} style={{
-                fontSize: 9, fontWeight: 600, color: c.color,
-                padding: '3px 8px', background: `${c.color}14`, border: `1px solid ${c.color}28`,
-                borderRadius: 20
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 10,
+              background: 'linear-gradient(135deg, #10b981, #059669)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 0 16px rgba(16,185,129,0.3)',
+              fontSize: 18,
+            }}>🌾</div>
+            <div>
+              <h1 style={{
+                fontSize: 22, fontWeight: 800, color: '#f1f5f9',
+                fontFamily: "'Syne', sans-serif",
+                letterSpacing: '-.4px', lineHeight: 1,
               }}>
-                {c.label}
-              </span>
-            ))}
+                Nandha Farm
+              </h1>
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'rgba(20,184,166,.75)', fontFamily: "'Syne', sans-serif", marginTop: 1 }}>
+                ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ ਸਰਦਾਰ ਜੀ
+              </p>
+            </div>
           </div>
+          <p style={{ fontSize: 12, color: '#4b5e76', marginTop: 6 }}>
+            Fatehpur · Samana · Patiala, Punjab, India
+          </p>
         </div>
 
-        {/* ── Row 1: Financial KPIs ───────────────────── */}
-        <div>
-          <SLabel text="Financial Overview" />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
-            <KPICard label="Total Revenue" value={fc(stats?.totalRevenue ?? 0)} sub="All modules" icon={<IndianRupee size={15} />} color="#38bdf8" loading={L} />
-            <KPICard label="Total Expenses" value={fc(stats?.totalExpenses ?? 0)} sub="All modules" icon={<TrendingDown size={15} />} color="#f87171" loading={L} />
-            <KPICard label="Net Profit" value={fc(stats?.netProfit ?? 0)} sub="Surplus this month" icon={<TrendingUp size={15} />} color="#4ade80" loading={L} />
-            <KPICard label="Today's Milk" value={`${stats?.todayMilkLiters ?? 0} L`} sub="This morning + evening" icon={<Milk size={15} />} color="#38bdf8" loading={L} />
-          </div>
+        {/* Status tags */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {[
+            { label: '● Live', color: '#34d399', bg: 'rgba(52,211,153,0.1)', border: 'rgba(52,211,153,0.2)' },
+            { label: `${stats?.todayMilkLiters ?? '—'}L today`, color: '#38bdf8', bg: 'rgba(56,189,248,0.1)', border: 'rgba(56,189,248,0.2)' },
+            { label: `${stats?.activeCrops ?? '—'} crops`, color: '#34d399', bg: 'rgba(52,211,153,0.08)', border: 'rgba(52,211,153,0.15)' },
+            { label: `${stats?.herdSize ?? '—'} animals`, color: '#fbbf24', bg: 'rgba(251,191,36,0.08)', border: 'rgba(251,191,36,0.18)' },
+          ].map(tag => (
+            <span key={tag.label} style={{
+              fontSize: 11, fontWeight: 600, color: tag.color,
+              padding: '5px 12px',
+              background: tag.bg,
+              border: `1px solid ${tag.border}`,
+              borderRadius: 20,
+              fontFamily: "'DM Sans', sans-serif",
+            }}>
+              {tag.label}
+            </span>
+          ))}
         </div>
+      </div>
 
-        {/* ── Row 2: Operations KPIs ──────────────────── */}
-        <div>
-          <SLabel text="Operations" />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
-            <KPICard label="Active Seasons" value={String(stats?.activeSeasons ?? 0)} sub="Crops in field" icon={<Sprout size={12} />} color="#86efac" loading={L} />
-            <KPICard label="Herd Size" value={String(stats?.herdSize ?? 0)} sub={`${stats?.cowCount ?? 0} cows · ${stats?.buffaloCount ?? 0} buffalo`} icon={<Scale size={12} />} color="#38bdf8" loading={L} />
-            <KPICard label="Pending Labour" value={fc(stats?.pendingWages ?? 0)} sub="Awaiting payment" icon={<Wallet size={12} />} color="#a78bfa" loading={L} />
-            <KPICard label="All Seasons" value={String(stats?.allSeasons ?? 0)} sub="All seasons" icon={<CalendarDays size={12} />} color="#fb923c" loading={L} />
-          </div>
+      {/* ── KPI cards ─────────────────────────────────── */}
+      <section aria-label="Financial KPIs">
+        <SectionHead label="Financial Overview" />
+        <div className="kpi-grid stagger">
+          <StatCard
+            label="Total Revenue"
+            value={stats?.totalRevenue ?? 0}
+            format="currency"
+            compact
+            icon={<TrendingUp size={15} />}
+            accentColor="#38bdf8"
+            trend={8.4}
+            trendLabel="vs last month"
+            sparkData={revSpark}
+            loading={L}
+            animIndex={0}
+          />
+          <StatCard
+            label="Total Expenses"
+            value={stats?.totalExpenses ?? 0}
+            format="currency"
+            compact
+            icon={<TrendingDown size={15} />}
+            accentColor="#f87171"
+            trend={-3.1}
+            trendLabel="vs last month"
+            sparkData={expSpark}
+            loading={L}
+            animIndex={1}
+          />
+          <StatCard
+            label="Net Profit"
+            value={stats?.netProfit ?? 0}
+            format="currency"
+            compact
+            icon={<IndianRupee size={15} />}
+            accentColor="#34d399"
+            trend={12.6}
+            trendLabel="vs last month"
+            sparkData={profSpark}
+            loading={L}
+            animIndex={2}
+          />
+          <StatCard
+            label="Today's Milk"
+            value={stats?.todayMilkLiters ?? 0}
+            suffix=" L"
+            icon={<Milk size={15} />}
+            accentColor="#14b8a6"
+            trend={4.2}
+            trendLabel="vs yesterday"
+            loading={L}
+            animIndex={3}
+          />
+          <StatCard
+            label="Active Seasons"
+            value={stats?.activeSeasons ?? 0}
+            icon={<Sprout size={15} />}
+            accentColor="#6ee7b7"
+            trend={0}
+            trendLabel="no change"
+            loading={L}
+            animIndex={4}
+          />
         </div>
+      </section>
 
-        {/* ── Row 3: Charts ───────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 10 }}>
+      {/* ── Operations KPIs ───────────────────────────── */}
+      <section aria-label="Operations KPIs">
+        <SectionHead label="Operations" />
+        <div className="kpi-grid stagger">
+          <StatCard
+            label="Herd Size"
+            value={stats?.herdSize ?? 0}
+            suffix={` animals`}
+            icon={<Scale size={15} />}
+            accentColor="#38bdf8"
+            loading={L}
+            animIndex={0}
+          />
+          <StatCard
+            label="Cows"
+            value={stats?.cowCount ?? 0}
+            icon={<Leaf size={15} />}
+            accentColor="#6ee7b7"
+            loading={L}
+            animIndex={1}
+          />
+          <StatCard
+            label="Buffalo"
+            value={stats?.buffaloCount ?? 0}
+            icon={<Activity size={15} />}
+            accentColor="#14b8a6"
+            loading={L}
+            animIndex={2}
+          />
+          <StatCard
+            label="Pending Wages"
+            value={stats?.pendingWages ?? 0}
+            format="currency"
+            compact
+            icon={<Wallet size={15} />}
+            accentColor="#a78bfa"
+            loading={L}
+            animIndex={3}
+          />
+          <StatCard
+            label="All Seasons"
+            value={stats?.allSeasons ?? 0}
+            icon={<CalendarDays size={15} />}
+            accentColor="#fbbf24"
+            loading={L}
+            animIndex={4}
+          />
+        </div>
+      </section>
 
-          {/* Revenue vs Expenses */}
+      {/* ── Charts row ────────────────────────────────── */}
+      <section aria-label="Analytics charts">
+        <SectionHead label="Analytics" />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 14 }}>
+
+          {/* Revenue vs Expenses area chart */}
           <Card>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
               <div>
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#6a7a8a', fontFamily: 'Syne,sans-serif' }}>Revenue vs Expenses</p>
-                <p style={{ fontSize: 9, color: '#2a3545', marginTop: 2 }}>Last 30 days</p>
+                <p style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0', fontFamily: "'Syne', sans-serif" }}>
+                  Revenue vs Expenses
+                </p>
+                <p style={{ fontSize: 11, color: '#4b5e76', marginTop: 3 }}>Financial trend over time</p>
               </div>
-              <PToggle period={period} set={setPeriod} />
+              <PeriodToggle value={period} onChange={setPeriod} />
             </div>
-            {L ? <div className="skeleton" style={{ height: 160, borderRadius: 8 }} /> :
-              !profitChart.length ? <Empty msg="No data for this period" /> : (
-                <ResponsiveContainer width="100%" height={160}>
-                  <AreaChart data={profitChart} margin={{ top: 3, right: 3, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="gR2" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.3} />
-                        <stop offset="100%" stopColor="#38bdf8" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="gE2" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#f87171" stopOpacity={0.22} />
-                        <stop offset="100%" stopColor="#f87171" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="2 4" stroke="#111820" vertical={false} />
-                    <XAxis dataKey="date" tick={{ fill: '#2a3545', fontSize: 8 }} axisLine={false} tickLine={false} dy={4} />
-                    <YAxis tick={{ fill: '#2a3545', fontSize: 8 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => fc(v)} width={44} />
-                    <Tooltip content={<ChartTip />} />
-                    <Area type="monotone" dataKey="revenue" stroke="#38bdf8" strokeWidth={1.5} fill="url(#gR2)" dot={false} activeDot={{ r: 3 }} />
-                    <Area type="monotone" dataKey="expenses" stroke="#f87171" strokeWidth={1.5} fill="url(#gE2)" dot={false} activeDot={{ r: 3 }} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )}
-            <div style={{ display: 'flex', gap: 14, marginTop: 8 }}>
-              {[['Revenue', '#38bdf8'], ['Expenses', '#f87171']].map(([l, c]) => (
-                <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ width: 16, height: 2, background: c, borderRadius: 2, display: 'inline-block' }} />
-                  <span style={{ fontSize: 9, color: '#3a4a5a' }}>{l}</span>
-                </div>
-              ))}
-            </div>
-          </Card>
 
-          {/* Expense Breakdown */}
-          <Card>
-            <CardHead title="Expense Breakdown" right="This week" />
-            {L ? <div className="skeleton" style={{ height: 160, borderRadius: 8 }} /> :
-              !pieData.length ? <Empty msg="No expense data this week" /> : (
-                <>
-                  <ResponsiveContainer width="100%" height={110}>
-                    <PieChart>
-                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={30} outerRadius={48} paddingAngle={2} dataKey="value" stroke="none">
-                        {pieData.map((e, i) => <Cell key={i} fill={e.color} opacity={0.85} />)}
-                      </Pie>
-                      <Tooltip formatter={(v: number) => fc(v)} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 6 }}>
-                    {pieData.map(d => (
-                      <div key={d.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: d.color, display: 'inline-block' }} />
-                          <span style={{ fontSize: 10, color: '#6a7a8a', textTransform: 'capitalize' }}>{d.name}</span>
-                        </div>
-                        <span style={{ fontSize: 10, fontWeight: 600, color: '#c8d8e8', fontFamily: 'Syne,sans-serif' }}>{fc(d.value)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-          </Card>
-        </div>
-
-        {/* ── Row 4: Milk + Module Perf + Alerts ─────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 240px', gap: 10 }}>
-
-          {/* Milk Production */}
-          <Card>
-            <CardHead title={`🥛 Milk Production`} right={`${stats?.todayMilkLiters ?? 0}L this week`} />
-            {L ? <div className="skeleton" style={{ height: 120, borderRadius: 8 }} /> :
-              !profitChart.length ? <Empty msg="No milk records" /> : (
-                <ResponsiveContainer width="100%" height={120}>
-                  <AreaChart data={profitChart} margin={{ top: 3, right: 3, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="gM2" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.35} />
-                        <stop offset="100%" stopColor="#38bdf8" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="2 4" stroke="#111820" vertical={false} />
-                    <XAxis dataKey="date" tick={{ fill: '#2a3545', fontSize: 7 }} axisLine={false} tickLine={false} dy={3} />
-                    <YAxis hide />
-                    <Tooltip content={<ChartTip />} />
-                    <Area type="monotone" dataKey="revenue" stroke="#38bdf8" strokeWidth={1.5} fill="url(#gM2)" dot={false} name="Milk (L)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )}
-          </Card>
-
-          {/* Module Performance */}
-          <Card>
-            <CardHead title="Module Performance" />
             {L ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {[1, 2, 3, 4].map(i => <div key={i} className="skeleton" style={{ height: 28, borderRadius: 6 }} />)}
-              </div>
-            ) : !kpis.length ? <Empty msg="No module data" /> : (
-              kpis.map(k => <ModBar key={k.module} kpi={k} />)
+              <div className="skeleton" style={{ height: 170, borderRadius: 10 }} />
+            ) : !profitChart.length ? (
+              <Empty msg="No chart data for this period" />
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={170}>
+                  <AreaChart data={profitChart} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="gradRev" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor="#38bdf8" stopOpacity={0.25} />
+                        <stop offset="100%" stopColor="#38bdf8" stopOpacity={0}    />
+                      </linearGradient>
+                      <linearGradient id="gradExp" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor="#f87171" stopOpacity={0.2} />
+                        <stop offset="100%" stopColor="#f87171" stopOpacity={0}   />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="2 6" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fill: '#4b5e76', fontSize: 10, fontFamily: "'DM Sans', sans-serif" }}
+                      axisLine={false} tickLine={false} dy={5}
+                    />
+                    <YAxis
+                      tick={{ fill: '#4b5e76', fontSize: 10, fontFamily: "'DM Sans', sans-serif" }}
+                      axisLine={false} tickLine={false}
+                      tickFormatter={fc} width={48}
+                    />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Area type="monotone" dataKey="revenue"  stroke="#38bdf8" strokeWidth={2}   fill="url(#gradRev)" dot={false} activeDot={{ r: 4, fill: '#38bdf8' }} />
+                    <Area type="monotone" dataKey="expenses" stroke="#f87171" strokeWidth={1.5} fill="url(#gradExp)" dot={false} activeDot={{ r: 4, fill: '#f87171' }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+
+                {/* Legend */}
+                <div style={{ display: 'flex', gap: 18, marginTop: 12 }}>
+                  {[['Revenue', '#38bdf8'], ['Expenses', '#f87171']].map(([l, c]) => (
+                    <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 20, height: 2, background: c, borderRadius: 2, display: 'inline-block' }} />
+                      <span style={{ fontSize: 11, color: '#4b5e76' }}>{l}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </Card>
 
-          {/* Alerts */}
-          <Card style={{ padding: '14px 12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: '#6a7a8a', fontFamily: 'Syne,sans-serif' }}>Alerts</p>
+          {/* Revenue distribution donut */}
+          <Card>
+            <CardHead title="Revenue Share" sub="By module" />
+            {L ? (
+              <div className="skeleton" style={{ height: 170, borderRadius: 10 }} />
+            ) : !pieData.length ? (
+              <Empty msg="No revenue data" />
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={130}>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%" cy="50%"
+                      innerRadius={36} outerRadius={56}
+                      paddingAngle={3} dataKey="value" stroke="none"
+                    >
+                      {pieData.map((d, i) => <Cell key={i} fill={d.color} opacity={0.88} />)}
+                    </Pie>
+                    <Tooltip formatter={(v: number) => fc(v)} />
+                  </PieChart>
+                </ResponsiveContainer>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                  {pieData.map(d => (
+                    <div key={d.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, display: 'inline-block' }} />
+                        <span style={{ fontSize: 12, color: '#94a3b8', textTransform: 'capitalize' }}>{d.name}</span>
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: d.color, fontFamily: "'Syne', sans-serif" }}>
+                        {fc(d.value)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </Card>
+        </div>
+      </section>
+
+      {/* ── Module overview cards ──────────────────────── */}
+      <section aria-label="Module overviews">
+        <SectionHead label="Module Overview" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+
+          {/* Agriculture */}
+          <Card>
+            <CardHead
+              title="Agriculture"
+              sub="Crops & seasons"
+              right={
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)' }}>
+                  <Leaf size={11} style={{ color: '#34d399' }} />
+                  <span style={{ fontSize: 10, fontWeight: 600, color: '#34d399' }}>
+                    {stats?.activeCrops ?? '—'} active
+                  </span>
+                </div>
+              }
+            />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+              <MiniStat label="Active Seasons" value={stats?.activeSeasons ?? '—'} color="#34d399" />
+              <MiniStat label="All Seasons"    value={stats?.allSeasons ?? '—'}    color="#6ee7b7" />
+            </div>
+            <ProgressRow label="Kanak (Wheat)"  sub="Planned → Active"   value={72} color="#34d399" />
+            <ProgressRow label="Jhona (Rice)"   sub="Active"             value={55} color="#6ee7b7" />
+            <ProgressRow label="Makki (Maize)"  sub="Harvested"          value={90} color="#fbbf24" />
+          </Card>
+
+          {/* Dairy */}
+          <Card>
+            <CardHead
+              title="Dairy"
+              sub="Herd & milk"
+              right={
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, background: 'rgba(56,189,248,0.1)', border: '1px solid rgba(56,189,248,0.2)' }}>
+                  <Milk size={11} style={{ color: '#38bdf8' }} />
+                  <span style={{ fontSize: 10, fontWeight: 600, color: '#38bdf8' }}>
+                    {stats?.herdSize ?? '—'} head
+                  </span>
+                </div>
+              }
+            />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+              <MiniStat label="Cows"       value={stats?.cowCount     ?? '—'} color="#38bdf8" />
+              <MiniStat label="Buffalo"    value={stats?.buffaloCount ?? '—'} color="#14b8a6" />
+              <MiniStat label="Today Milk" value={`${stats?.todayMilkLiters ?? '—'}L`} color="#34d399" />
+              <MiniStat label="Herd Size"  value={stats?.herdSize     ?? '—'} color="#6ee7b7" />
+            </div>
+            <p style={{ fontSize: 10, color: '#4b5e76', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>
+              Milk output trend
+            </p>
+            {L
+              ? <div className="skeleton" style={{ height: 36 }} />
+              : profitChart.length > 0 && (
+                <ResponsiveContainer width="100%" height={40}>
+                  <AreaChart data={profitChart} margin={{ top: 2, right: 2, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="gradMilk" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor="#38bdf8" stopOpacity={0.3} />
+                        <stop offset="100%" stopColor="#38bdf8" stopOpacity={0}   />
+                      </linearGradient>
+                    </defs>
+                    <Area type="monotone" dataKey="revenue" stroke="#38bdf8" strokeWidth={1.5} fill="url(#gradMilk)" dot={false} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )
+            }
+          </Card>
+
+          {/* Shop */}
+          <Card>
+            <CardHead
+              title="Shop & POS"
+              sub="Sales & processing"
+              right={
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.2)' }}>
+                  <ShoppingCart size={11} style={{ color: '#fbbf24' }} />
+                  <span style={{ fontSize: 10, fontWeight: 600, color: '#fbbf24' }}>Today</span>
+                </div>
+              }
+            />
+            {kpis.filter(k => k.module === 'shop').map(k => (
+              <div key={k.module} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+                <MiniStat label="Revenue"  value={fc(k.revenue)}  color="#fbbf24" />
+                <MiniStat label="Expenses" value={fc(k.expenses)} color="#f87171" />
+                <MiniStat label="Profit"   value={fc(k.profit)}   color={k.profit >= 0 ? '#34d399' : '#f87171'} />
+              </div>
+            ))}
+            {!kpis.find(k => k.module === 'shop') && !L && (
+              <Empty msg="No shop data available" />
+            )}
+            {L && <div className="skeleton" style={{ height: 90, borderRadius: 10 }} />}
+            <ProgressRow label="Sales Target" value={68} color="#fbbf24" />
+            <ProgressRow label="Processing Efficiency" value={82} color="#34d399" />
+          </Card>
+        </div>
+      </section>
+
+      {/* ── Module performance + Activity + Alerts ──── */}
+      <section aria-label="Performance and alerts">
+        <SectionHead label="Performance & Activity" />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 280px', gap: 14 }}>
+
+          {/* Module performance */}
+          <Card>
+            <CardHead title="Module Performance" sub="Revenue & profit by module" />
+            {L
+              ? Array(3).fill(0).map((_, i) => <div key={i} className="skeleton" style={{ height: 40, marginBottom: 14, borderRadius: 8 }} />)
+              : !kpis.length
+              ? <Empty msg="No module data" />
+              : kpis.map(k => <ModuleBar key={k.module} kpi={k} />)
+            }
+          </Card>
+
+          {/* Recent Activity */}
+          <Card>
+            <CardHead
+              title="Recent Activity"
+              sub={`${recentActivity.length} recent events`}
+            />
+            {L
+              ? Array(4).fill(0).map((_, i) => <div key={i} className="skeleton" style={{ height: 50, marginBottom: 10, borderRadius: 8 }} />)
+              : !recentActivity.length
+              ? <Empty msg="No recent activity" />
+              : recentActivity.slice(0, 6).map(item => <ActivityRow key={item.id} item={item} />)
+            }
+          </Card>
+
+          {/* Alerts panel */}
+          <Card style={{ padding: '18px 16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0', fontFamily: "'Syne', sans-serif" }}>Smart Alerts</p>
+                <p style={{ fontSize: 11, color: '#4b5e76', marginTop: 2 }}>Farm-wide notifications</p>
+              </div>
               {warnCount > 0 && (
                 <span style={{
-                  fontSize: 9, padding: '2px 6px', background: 'rgba(239,68,68,0.12)',
-                  color: '#fca5a5', borderRadius: 20, border: '1px solid rgba(239,68,68,0.2)'
+                  fontSize: 10, fontWeight: 700,
+                  padding: '3px 8px', borderRadius: 20,
+                  background: 'rgba(248,113,113,0.1)',
+                  color: '#f87171',
+                  border: '1px solid rgba(248,113,113,0.2)',
                 }}>
-                  {warnCount}
+                  {warnCount} active
                 </span>
               )}
             </div>
-            <div style={{ overflowY: 'auto', maxHeight: 200 }}>
+            <div style={{ overflowY: 'auto', maxHeight: 320, scrollbarWidth: 'none' }}>
               <AlertPanel
                 alerts={alerts}
                 onDismiss={dismissAlert}
                 loading={loading}
+                compact
               />
             </div>
           </Card>
         </div>
+      </section>
 
-        {/* ── Row 5: Recent Activity ───────────────────── */}
-        <Card>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: '#6a7a8a', fontFamily: 'Syne,sans-serif' }}>Recent Activity</p>
-            <span style={{ fontSize: 9, color: '#2a3545' }}>{recentActivity.length} events</span>
-          </div>
-          {L ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
-              {[1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 48, borderRadius: 8 }} />)}
-            </div>
-          ) : !recentActivity.length ? <Empty msg="No recent activity" /> : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '0 16px' }}>
-              {recentActivity.slice(0, 9).map(item => <ActRow key={item.id} item={item} />)}
-            </div>
-          )}
-        </Card>
-
-      </div>
     </div>
   );
 }
