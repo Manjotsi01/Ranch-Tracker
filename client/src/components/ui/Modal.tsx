@@ -1,8 +1,4 @@
 // client/src/components/ui/Modal.tsx
-// FIX: Removed auto-focus on close button which stole focus from form inputs,
-//      causing the "types one character then focus jumps to close button" UX bug.
-//      Focus now goes to the first focusable element that is NOT the close button.
-
 import { useEffect, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -37,9 +33,10 @@ export default function Modal({
   persistent = false,
   description,
 }: ModalProps) {
-  const dialogRef  = useRef<HTMLDivElement>(null);
-  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const firstFocusRef = useRef<HTMLButtonElement>(null);
 
+  /* Keyboard & scroll lock */
   useEffect(() => {
     if (!open) return;
 
@@ -49,46 +46,25 @@ export default function Modal({
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !persistent) onClose();
 
-      // Tab trap — keep focus within the dialog
+      // Tab trap
       if (e.key === 'Tab' && dialogRef.current) {
         const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
         );
-        if (focusable.length === 0) return;
         const first = focusable[0];
         const last  = focusable[focusable.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
+        if (e.shiftKey ? document.activeElement === first : document.activeElement === last) {
           e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
+          (e.shiftKey ? last : first)?.focus();
         }
       }
     };
 
     document.addEventListener('keydown', handler);
-
-    // FIX: Focus the first focusable element inside the body (inputs, selects, etc.)
-    // NOT the close button. This allows the user to start typing immediately in forms.
-    // We delay slightly to let the DOM paint first.
-    const focusTimer = setTimeout(() => {
-      if (!dialogRef.current) return;
-      // Look for the first interactive element inside the scrollable body area (not header/footer)
-      const body = dialogRef.current.querySelector<HTMLElement>('.modal-body');
-      const firstInput = body?.querySelector<HTMLElement>(
-        'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])'
-      );
-      if (firstInput) {
-        firstInput.focus();
-      } else {
-        // Fallback: focus the close button only if there's nothing better
-        closeBtnRef.current?.focus();
-      }
-    }, 60);
+    // Auto-focus close button
+    setTimeout(() => firstFocusRef.current?.focus(), 50);
 
     return () => {
-      clearTimeout(focusTimer);
       document.removeEventListener('keydown', handler);
       document.body.style.overflow = prevOverflow;
     };
@@ -147,13 +123,9 @@ export default function Modal({
               </p>
             )}
           </div>
-          {/* FIX: tabIndex="-1" prevents this button from receiving focus during Tab trap
-              when the user is typing in a form. It can still be clicked with the mouse,
-              or reached via keyboard by shift-tabbing from the first focusable element. */}
           <button
-            ref={closeBtnRef}
+            ref={firstFocusRef}
             onClick={onClose}
-            tabIndex={-1}
             className="w-7 h-7 rounded-lg flex items-center justify-center text-[#3a5a4a] hover:text-[#86efac] hover:bg-emerald-500/8 transition-all duration-150 flex-shrink-0 ml-3"
             aria-label="Close dialog"
           >
@@ -161,8 +133,8 @@ export default function Modal({
           </button>
         </div>
 
-        {/* Body — scrollable. The "modal-body" class is used by the focus logic above. */}
-        <div className="modal-body px-5 py-4 overflow-y-auto flex-1 overscroll-contain">
+        {/* Body — scrollable */}
+        <div className="px-5 py-4 overflow-y-auto flex-1 overscroll-contain">
           {children}
         </div>
 
