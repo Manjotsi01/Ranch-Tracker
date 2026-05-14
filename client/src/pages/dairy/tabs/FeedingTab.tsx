@@ -1,5 +1,3 @@
-// client/src/pages/dairy/tabs/FeedingTab.tsx
-
 import { useEffect, useState } from 'react'
 import { useFeeding } from '../../../hooks/useDairyData'
 import { Input, Select } from '../../../components/ui/Input'
@@ -13,7 +11,11 @@ interface Props { animalId: string; accent: string }
 
 const fodderOpts = FODDER_TYPES.map((f) => ({ value: f.value, label: f.label }))
 
-export function FeedTab({ animalId, accent }: Props) {
+const EMPTY_PLAN_FORM = {
+  fodderType: 'GREEN', fodderName: '', dailyQuantity: '', unit: 'kg', costPerUnit: '',
+}
+
+export default function FeedTab({ animalId, accent }: Props) {
   const { summary, feedingPlan, loading, fetch, addFeedRecord, saveFeedingPlan } = useFeeding(animalId)
   const [showLog, setShowLog]   = useState(false)
   const [showPlan, setShowPlan] = useState(false)
@@ -22,13 +24,17 @@ export function FeedTab({ animalId, accent }: Props) {
   const [feedForm, setFeedForm] = useState({
     date: '', fodderType: 'GREEN', fodderName: '', quantity: '', costPerKg: '', notes: '',
   })
-  const [planForm, setPlanForm] = useState({
-    fodderType: 'GREEN', fodderName: '', dailyQuantity: '', unit: 'kg', costPerUnit: '',
-  })
+
+  // FIX: Track the new items being added in this modal session separately from planForm
+  const [planForm, setPlanForm] = useState(EMPTY_PLAN_FORM)
+  // FIX: Items queued for this save session (not yet persisted)
+  const [pendingItems, setPendingItems] = useState<typeof EMPTY_PLAN_FORM[]>([])
+  // Removed unused addedCount state
 
   useEffect(() => { fetch() }, [fetch])
 
   const handleLogFeed = async () => {
+    if (!feedForm.date || !feedForm.quantity) return
     setSaving(true)
     try {
       await addFeedRecord({
@@ -42,22 +48,58 @@ export function FeedTab({ animalId, accent }: Props) {
     } catch { } finally { setSaving(false) }
   }
 
+  // FIX: "Add Item" now just adds to the pendingItems list — does NOT close modal or save.
+  const handleAddItemToQueue = () => {
+    if (!planForm.fodderName.trim() || !planForm.dailyQuantity) return
+    setPendingItems(prev => [...prev, { ...planForm }])
+    // Clear the form for the next item, but keep the modal open
+    setPlanForm(EMPTY_PLAN_FORM)
+  }
+
+  // FIX: "Save Plan" sends ALL existing plan items + all pending items as one PUT.
+  // This prevents the upsert from wiping existing items.
   const handleSavePlan = async () => {
+    if (pendingItems.length === 0) {
+      setShowPlan(false)
+      return
+    }
     setSaving(true)
     try {
-      await saveFeedingPlan({
-        ...planForm,
-        dailyQuantity: Number(planForm.dailyQuantity),
-        costPerUnit:   planForm.costPerUnit ? Number(planForm.costPerUnit) : undefined,
-      })
-      setShowPlan(false); fetch()
+      const plan = feedingPlan as FeedingPlan[]
+      // Build merged plan: keep existing items + add pending ones
+      const existingPayload = plan.map(p => ({
+        fodderType:    p.fodderType,
+        fodderName:    p.fodderName,
+        dailyQuantity: p.dailyQuantity,
+        unit:          p.unit,
+        costPerUnit:   p.costPerUnit,
+      }))
+      const newPayload = pendingItems.map(item => ({
+        fodderType:    item.fodderType,
+        fodderName:    item.fodderName,
+        dailyQuantity: Number(item.dailyQuantity),
+        unit:          item.unit,
+        costPerUnit:   item.costPerUnit ? Number(item.costPerUnit) : undefined,
+      }))
+
+      // The API endpoint expects { items: [...] } — send full merged array
+      await saveFeedingPlan({ items: [...existingPayload, ...newPayload] })
+      setShowPlan(false)
+      setPendingItems([])
+      setPlanForm(EMPTY_PLAN_FORM)
+      fetch()
     } catch { } finally { setSaving(false) }
   }
 
-  // ── Derived daily stats from feeding plan ──────────────────────────────────
+  const handleClosePlanModal = () => {
+    setShowPlan(false)
+    setPendingItems([])
+    setPlanForm(EMPTY_PLAN_FORM)
+  }
+
+  // Derived daily stats
   const plan = feedingPlan as FeedingPlan[]
 
-  // Use pre-computed breakdown from backend if available, otherwise compute here
   const breakdown: DailyFeedBreakdown[] = (summary as any)?.dailyBreakdown ?? (() => {
     const map = new Map<string, DailyFeedBreakdown>()
     plan.forEach((p) => {
@@ -75,7 +117,6 @@ export function FeedTab({ animalId, accent }: Props) {
   const monthlyFeedCost = summary?.monthlyFeedCost ?? 0
   const yearlyFeedCost  = summary?.yearlyFeedCost  ?? 0
 
-  // Pie data
   const pieData = breakdown.map((d) => ({
     name:  FODDER_TYPES.find(f => f.value === d.fodderType)?.label ?? d.fodderType,
     value: d.totalQuantity,
@@ -85,7 +126,7 @@ export function FeedTab({ animalId, accent }: Props) {
   return (
     <div style={{ maxWidth: 960 }}>
 
-      {/* ── Cost summary strip ────────────────────────────────────────────── */}
+      {/* Cost summary strip */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 20 }}>
         {[
           { label: 'Daily Feed Cost',   value: formatCurrency(dailyFeedCost),   color: accent    },
@@ -102,7 +143,7 @@ export function FeedTab({ animalId, accent }: Props) {
         ))}
       </div>
 
-      {/* ── Daily breakdown by fodder type ───────────────────────────────── */}
+      {/* Daily breakdown */}
       {breakdown.length > 0 && (
         <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '16px 18px', marginBottom: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
           <p style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 14px' }}>
@@ -144,7 +185,6 @@ export function FeedTab({ animalId, accent }: Props) {
               )
             })}
           </div>
-          {/* Total row */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTop: '1px solid #e2e8f0', marginTop: 4 }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5 }}>Total Daily</span>
             <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
@@ -155,10 +195,9 @@ export function FeedTab({ animalId, accent }: Props) {
         </div>
       )}
 
-      {/* ── Feeding Plan + Pie ────────────────────────────────────────────── */}
+      {/* Feeding Plan + Pie */}
       <div style={{ display: 'grid', gridTemplateColumns: plan.length > 0 ? '1fr 280px' : '1fr', gap: 16, marginBottom: 20 }}>
 
-        {/* Feeding Plan list */}
         <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '16px 18px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <div>
@@ -216,7 +255,6 @@ export function FeedTab({ animalId, accent }: Props) {
           )}
         </div>
 
-        {/* Pie chart */}
         {plan.length > 0 && (
           <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '16px 18px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
             <p style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 10px' }}>
@@ -287,19 +325,53 @@ export function FeedTab({ animalId, accent }: Props) {
         </div>
       </Modal>
 
-      {/* Plan Item Modal */}
-      <Modal open={showPlan} onClose={() => setShowPlan(false)} title="Add to Feeding Plan"
+      {/* Plan Item Modal — FIX: allows adding multiple items before saving */}
+      <Modal
+        open={showPlan}
+        onClose={handleClosePlanModal}
+        title="Add to Feeding Plan"
         footer={<>
-          <button onClick={() => setShowPlan(false)} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontSize: 13 }}>Cancel</button>
-          <button onClick={handleSavePlan} disabled={saving} style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: accent, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-            {saving ? 'Saving…' : 'Add to Plan'}
+          <button onClick={handleClosePlanModal} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontSize: 13 }}>
+            Cancel
+          </button>
+          {/* FIX: "Add Another" keeps modal open and queues the item */}
+          <button onClick={handleAddItemToQueue} disabled={!planForm.fodderName.trim() || !planForm.dailyQuantity} style={{
+            padding: '7px 16px', borderRadius: 8, border: `1px solid ${accent}40`,
+            background: accent + '12', color: accent, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            opacity: (!planForm.fodderName.trim() || !planForm.dailyQuantity) ? 0.5 : 1,
+          }}>
+            + Add Another
+          </button>
+          {/* FIX: "Save Plan" commits all pending items at once */}
+          <button onClick={handleSavePlan} disabled={saving || pendingItems.length === 0} style={{
+            padding: '7px 16px', borderRadius: 8, border: 'none',
+            background: saving || pendingItems.length === 0 ? '#94a3b8' : accent,
+            color: '#fff', cursor: saving || pendingItems.length === 0 ? 'not-allowed' : 'pointer',
+            fontSize: 13, fontWeight: 600,
+          }}>
+            {saving ? 'Saving…' : pendingItems.length > 0 ? `Save ${pendingItems.length} Item${pendingItems.length > 1 ? 's' : ''}` : 'Save Plan'}
           </button>
         </>}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* FIX: Show pending items queued in this session */}
+          {pendingItems.length > 0 && (
+            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px' }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: '#166534', margin: '0 0 6px', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {pendingItems.length} item{pendingItems.length > 1 ? 's' : ''} ready to save
+              </p>
+              {pendingItems.map((item, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#15803d', marginBottom: 2 }}>
+                  <span>{item.fodderName} ({FODDER_TYPES.find(f => f.value === item.fodderType)?.label})</span>
+                  <span>{item.dailyQuantity} {item.unit}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Select label="Type" options={fodderOpts} value={planForm.fodderType} onChange={(e) => setPlanForm({ ...planForm, fodderType: e.target.value })} />
-            <Input label="Name"  value={planForm.fodderName} onChange={(e) => setPlanForm({ ...planForm, fodderName: e.target.value })} placeholder="e.g. Wheat Straw" />
+            <Input label="Name *" value={planForm.fodderName} onChange={(e) => setPlanForm({ ...planForm, fodderName: e.target.value })} placeholder="e.g. Wheat Straw" />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             <Input label="Daily Qty *" type="number" step="0.1"  value={planForm.dailyQuantity} onChange={(e) => setPlanForm({ ...planForm, dailyQuantity: e.target.value })} />
@@ -307,7 +379,8 @@ export function FeedTab({ animalId, accent }: Props) {
             <Input label="Cost/Unit ₹" type="number" step="0.01" value={planForm.costPerUnit}   onChange={(e) => setPlanForm({ ...planForm, costPerUnit: e.target.value })} />
           </div>
           <p style={{ fontSize: 11, color: '#94a3b8', margin: '4px 0 0' }}>
-            💡 Use <strong>g</strong> for supplements/minerals, <strong>kg</strong> for fodder
+            💡 Use <strong>g</strong> for supplements/minerals, <strong>kg</strong> for fodder.
+            Click <strong>+ Add Another</strong> to queue multiple items before saving.
           </p>
         </div>
       </Modal>
