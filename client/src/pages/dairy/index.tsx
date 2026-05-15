@@ -1,86 +1,51 @@
 // client/src/pages/dairy/index.tsx
-// FIX: Buffalo and Cow subsector cards were both showing the combined MILKING
-//      status count (e.g. milking cows=3, buffalo=2 both showed 5).
-//      Root cause: hs.byStatus.MILKING is the TOTAL count across all animal types.
-//      Fix: fetch per-type milking counts from hs.byType + hs.byStatus, OR
-//      derive them from the cow/buffalo-specific data by computing intersections.
-//      Since the API gives us byType (COW: N, BUFFALO: N) and byStatus (MILKING: N),
-//      the cleanest fix is to expose byTypeAndStatus from herdSummary if available,
-//      otherwise fall back to proportional estimates using byType shares.
-//      We also add a separate fetch for cow-milking and buffalo-milking counts.
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { dairyApi } from '../../lib/api'
 import { useAnimals } from '../../hooks/useAnimals'
 import { formatLiters } from '../../lib/utils'
-import type { Animal } from '../../types/index'
 
 export default function DairyPage() {
   const navigate = useNavigate()
   const { herdSummary, loading, fetchHerdSummary } = useAnimals()
 
-  // FIX: Track per-type milking counts separately
-  const [cowMilkingCount,     setCowMilkingCount]     = useState<number | null>(null)
-  const [buffaloMilkingCount, setBuffaloMilkingCount] = useState<number | null>(null)
-  const [cowTotal,            setCowTotal]            = useState<number | null>(null)
-  const [buffaloTotal,        setBuffaloTotal]        = useState<number | null>(null)
-  const [countsLoading,       setCountsLoading]       = useState(false)
-
   useEffect(() => { fetchHerdSummary() }, [fetchHerdSummary])
-
-  // FIX: Fetch actual per-type milking counts from the animals endpoint
-  useEffect(() => {
-    async function fetchTypeCounts() {
-      setCountsLoading(true)
-      try {
-        const [cowRes, bufRes] = await Promise.all([
-          dairyApi.getAnimals({ type: 'COW' }),
-          dairyApi.getAnimals({ type: 'BUFFALO' }),
-        ])
-        const cows:    Animal[] = cowRes.data?.data ?? cowRes.data ?? []
-        const buffalos: Animal[] = bufRes.data?.data ?? bufRes.data ?? []
-
-        setCowTotal(cows.length)
-        setBuffaloTotal(buffalos.length)
-        setCowMilkingCount(
-          cows.filter(a => a.status === 'MILKING' || a.status === 'LACTATING').length
-        )
-        setBuffaloMilkingCount(
-          buffalos.filter(a => a.status === 'MILKING' || a.status === 'LACTATING').length
-        )
-      } catch {
-        // Silently fall back to herdSummary data
-        setCowMilkingCount(null)
-        setBuffaloMilkingCount(null)
-      } finally {
-        setCountsLoading(false)
-      }
-    }
-    fetchTypeCounts()
-  }, [])
 
   const hs = herdSummary
 
-  type KPI = {
-    label: string
-    value: string | number
-    color?: string
-    sub?: string
-  }
+type KPI = {
+  label: string;
+  value: string | number;
+  color?: string;
+  sub?: string;
+};
 
-  const kpis: KPI[] = [
-    { label: 'Total Herd',     value: hs?.totalAnimals ?? '—', color: '#0f172a', sub: 'Animals'  },
-    { label: 'Milking Today',  value: hs?.milkingCount ?? '—', color: '#16a34a', sub: 'Active'   },
-    { label: "Today's Yield",  value: hs ? formatLiters(hs.todayMilk) : '—', color: '#2563eb', sub: 'Liters' },
-    { label: 'Monthly Yield',  value: hs ? formatLiters(hs.monthlyMilk) : '—', color: '#7c3aed', sub: 'Total' },
-  ]
-
-  // FIX: Use per-type counts when available, fall back gracefully
-  const displayCowTotal     = cowTotal     ?? hs?.byType?.COW     ?? 0
-  const displayBuffaloTotal = buffaloTotal ?? hs?.byType?.BUFFALO ?? 0
-  const displayCowMilking   = cowMilkingCount     !== null ? cowMilkingCount     : '—'
-  const displayBufMilking   = buffaloMilkingCount !== null ? buffaloMilkingCount : '—'
+const kpis: KPI[] = [
+  {
+    label: 'Total Herd',
+    value: hs?.totalAnimals ?? '—',
+    color: '#0f172a',
+    sub: 'Animals',
+  },
+  {
+    label: 'Milking Today',
+    value: hs?.milkingCount ?? '—',
+    color: '#16a34a',
+    sub: 'Active',
+  },
+  {
+    label: "Today's Yield",
+    value: hs ? formatLiters(hs.todayMilk) : '—',
+    color: '#2563eb',
+    sub: 'Liters',
+  },
+  {
+    label: 'Monthly Yield',
+    value: hs ? formatLiters(hs.monthlyMilk) : '—',
+    color: '#7c3aed',
+    sub: 'Total',
+  },
+];
 
   const subsectors = [
     {
@@ -88,9 +53,8 @@ export default function DairyPage() {
       label: 'Cow Herd', sub: 'Breed · Milk · Health · Feed',
       accent: '#2563eb',
       stats: [
-        { l: 'Cows',    v: loading || countsLoading ? '…' : displayCowTotal },
-        // FIX: was using combined hs.byStatus.MILKING — now uses cow-specific count
-        { l: 'Milking', v: countsLoading ? '…' : displayCowMilking },
+        { l: 'Cows',    v: hs?.byType?.COW ?? 0 },
+        { l: 'Milking', v: hs?.byStatus?.MILKING ?? 0 },
       ],
     },
     {
@@ -98,9 +62,8 @@ export default function DairyPage() {
       label: 'Buffalo Herd', sub: 'Breed · Milk · Health · Feed',
       accent: '#0f172a',
       stats: [
-        { l: 'Buffaloes', v: loading || countsLoading ? '…' : displayBuffaloTotal },
-        // FIX: was using combined hs.byStatus.MILKING — now uses buffalo-specific count
-        { l: 'Milking',   v: countsLoading ? '…' : displayBufMilking },
+        { l: 'Buffaloes', v: hs?.byType?.BUFFALO ?? 0 },
+        { l: 'Milking',   v: hs?.byStatus?.MILKING ?? 0 },
       ],
     },
     {
@@ -119,16 +82,12 @@ export default function DairyPage() {
     : []
 
   const STATUS_STYLE: Record<string, { bg: string; dot: string; text: string }> = {
-    MILKING:         { bg: '#ecfdf5', dot: '#10b981', text: '#065f46' },
-    LACTATING:       { bg: '#ecfdf5', dot: '#10b981', text: '#065f46' },
-    DRY:             { bg: '#fefce8', dot: '#f59e0b', text: '#78350f' },
-    CALF:            { bg: '#eff6ff', dot: '#3b82f6', text: '#1e3a8a' },
-    HEIFER:          { bg: '#f5f3ff', dot: '#7c3aed', text: '#4c1d95' },
-    PREGNANT_HEIFER: { bg: '#fdf2f8', dot: '#ec4899', text: '#831843' },
-    TRANSITION:      { bg: '#fff7ed', dot: '#f97316', text: '#7c2d12' },
-    WEANED_CALF:     { bg: '#dbeafe', dot: '#60a5fa', text: '#1e40af' },
-    SOLD:            { bg: '#f0fdf4', dot: '#22c55e', text: '#14532d' },
-    DEAD:            { bg: '#fef2f2', dot: '#ef4444', text: '#7f1d1d' },
+    MILKING: { bg: '#ecfdf5', dot: '#10b981', text: '#065f46' },
+    DRY:     { bg: '#fefce8', dot: '#f59e0b', text: '#78350f' },
+    CALF:    { bg: '#eff6ff', dot: '#3b82f6', text: '#1e3a8a' },
+    HEIFER:  { bg: '#f5f3ff', dot: '#7c3aed', text: '#4c1d95' },
+    SOLD:    { bg: '#f0fdf4', dot: '#22c55e', text: '#14532d' },
+    DEAD:    { bg: '#fef2f2', dot: '#ef4444', text: '#7f1d1d' },
   }
 
   return (
@@ -222,7 +181,7 @@ export default function DairyPage() {
                 <div style={{ display: 'flex', gap: 20 }}>
                   {s.stats.map((st) => (
                     <div key={st.l} style={{ textAlign: 'center' }}>
-                      <p style={{ fontSize: 18, fontWeight: 700, color: s.accent, margin: 0 }}>{String(st.v)}</p>
+                      <p style={{ fontSize: 18, fontWeight: 700, color: s.accent, margin: 0 }}>{loading ? '…' : String(st.v)}</p>
                       <p style={{ fontSize: 10, color: '#94a3b8', margin: 0 }}>{st.l}</p>
                     </div>
                   ))}

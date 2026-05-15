@@ -1,3 +1,5 @@
+// client/src/hooks/useMilk.ts
+
 import { useState, useCallback } from 'react'
 import { shopApi } from '../lib/api'
 import type { MilkEntry, MilkStock } from '../types'

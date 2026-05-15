@@ -154,4 +154,4 @@ export function ProfitabilityTab({ animalId }: Props) {
 
     </div>
   )
-}
+}  

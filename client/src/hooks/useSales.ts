@@ -1,3 +1,4 @@
+// client/src/hooks/useProducts.ts
 import { useState, useCallback } from 'react'
 import { shopApi } from '../lib/api'
 import type { Sale, CreateSalePayload } from '../types'

@@ -1,3 +1,4 @@
+// client/src/hooks/useWholesale.ts
 import { useState, useCallback } from 'react'
 import { shopApi } from '../lib/api'
 

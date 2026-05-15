@@ -1,3 +1,5 @@
+// client/src/hooks/useReports.ts
+
 import { useState, useCallback } from 'react'
 import { shopApi } from '../lib/api'
 

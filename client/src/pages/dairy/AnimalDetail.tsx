@@ -1,3 +1,5 @@
+// client/src/pages/dairy/AnimalDetail.tsx
+
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../../lib/api'
@@ -7,7 +9,7 @@ import { formatDate, formatCurrency } from '../../lib/utils'
 import { AddAnimalForm } from './AddAnimalForm'
 import { BreedTab }        from './tabs/BreedTab'
 import { MilkTab }         from './tabs/MilkTab'
-import FeedTab from './tabs/FeedingTab' // Fixed: default import instead of named import
+import { FeedTab }         from './tabs/FeedingTab'
 import { HealthTab }       from './tabs/HealthTab'
 import { ReproductionTab } from './tabs/ReproductionTab'
 import { ALL_STAGES, STATUS_DOT, STATUS_BG, STATUS_TEXT, STATUS_LABEL } from '../../lib/animalStatus'
